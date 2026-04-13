@@ -1,0 +1,30 @@
+{
+  "name": "yolo-demo",
+  "task": "image-classification",
+  "top_k": 3,
+  "input_dim": 4,
+  "labels": [
+    {
+      "id": "traffic_cone",
+      "label": "traffic cone"
+    },
+    {
+      "id": "lifebuoy",
+      "label": "lifebuoy"
+    },
+    {
+      "id": "surfboard",
+      "label": "surfboard"
+    },
+    {
+      "id": "dog",
+      "label": "dog"
+    }
+  ],
+  "weights": [
+    [0.91, 0.35, 0.08, 0.44, -0.5753],
+    [0.86, 0.18, 0.14, 0.39, -0.47185],
+    [0.18, 0.42, 0.76, 0.36, -0.4580],
+    [0.70, 0.54, 0.34, 0.52, -0.5838]
+  ]
+}

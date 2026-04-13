@@ -1,0 +1,35 @@
+{
+  "name": "resnet50-demo",
+  "task": "image-classification",
+  "top_k": 3,
+  "input_dim": 4,
+  "labels": [
+    {
+      "id": "red_apple",
+      "label": "red apple"
+    },
+    {
+      "id": "banana",
+      "label": "banana"
+    },
+    {
+      "id": "sports_car",
+      "label": "sports car"
+    },
+    {
+      "id": "golden_retriever",
+      "label": "golden retriever"
+    },
+    {
+      "id": "ocean",
+      "label": "ocean"
+    }
+  ],
+  "weights": [
+    [0.86, 0.18, 0.12, 0.38, -0.4654],
+    [0.90, 0.82, 0.22, 0.72, -1.0246],
+    [0.74, 0.16, 0.18, 0.34, -0.3606],
+    [0.72, 0.56, 0.34, 0.54, -0.6196],
+    [0.14, 0.32, 0.74, 0.32, -0.3860]
+  ]
+}

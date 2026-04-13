@@ -1,0 +1,34 @@
+[package]
+name = "containerd-shim-webgpu"
+version = "0.1.0"
+edition.workspace = true
+readme = "README.md"
+
+[dependencies]
+anyhow = { workspace = true }
+cfg-if = { workspace = true }
+containerd-shim-wasm = { workspace = true, features = ["opentelemetry"] }
+log = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+pollster = "0.4"
+wasmedge-sdk = { version = "0.14.0", default-features = false }
+wgpu = "24.0.5"
+
+[dev-dependencies]
+containerd-shim-wasm = { workspace = true, features = ["testing"] }
+libc = { workspace = true }
+serial_test = { workspace = true }
+
+[features]
+default = ["standalone", "static", "plugin"]
+standalone = ["wasmedge-sdk/standalone"]
+static = ["wasmedge-sdk/static"]
+plugin = ["wasmedge-sdk/wasi_nn"]
+
+[[bin]]
+name = "containerd-shim-webgpu-v1"
+path = "src/main.rs"
+
+[package.metadata.cargo-machete]
+ignored = ["log"]
