@@ -26,7 +26,6 @@ struct RuntimeDescription {
     enabled: bool,
     backend: String,
     adapter_name: String,
-    device_path: Option<String>,
     device_available: bool,
     runtime_ready: bool,
     runtime_error: Option<String>,
@@ -51,7 +50,6 @@ struct DispatchResponse {
     entrypoint: String,
     backend: String,
     adapter_name: String,
-    device_path: Option<String>,
     workgroups: [u32; 3],
     invocations: u32,
     checksum: u64,
@@ -135,10 +133,6 @@ fn main() {
             println!("dispatch.backend={}", dispatch.backend);
             println!("dispatch.adapter_name={}", dispatch.adapter_name);
             println!(
-                "dispatch.device_path={}",
-                dispatch.device_path.as_deref().unwrap_or("unset")
-            );
-            println!(
                 "dispatch.workgroups={}x{}x{}",
                 dispatch.workgroups[0], dispatch.workgroups[1], dispatch.workgroups[2]
             );
@@ -218,10 +212,6 @@ fn print_runtime(runtime: &RuntimeDescription) {
     println!("webgpu.required={}", runtime.required);
     println!("webgpu.backend={}", runtime.backend);
     println!("webgpu.adapter_name={}", runtime.adapter_name);
-    println!(
-        "webgpu.device_path={}",
-        runtime.device_path.as_deref().unwrap_or("unset")
-    );
     println!("webgpu.device_available={}", runtime.device_available);
     println!("webgpu.runtime_ready={}", runtime.runtime_ready);
     println!(

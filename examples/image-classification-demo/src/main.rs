@@ -50,12 +50,25 @@ struct DemoLabel {
 }
 
 #[derive(Debug, Deserialize)]
+struct RuntimeDescription {
+    enabled: bool,
+    backend: String,
+    adapter_name: String,
+    device_available: bool,
+    runtime_ready: bool,
+    runtime_error: Option<String>,
+    max_buffer_size: u64,
+    max_bind_groups: u32,
+    force_fallback_adapter: bool,
+    required: bool,
+}
+
+#[derive(Debug, Deserialize)]
 struct DispatchResponse {
     kind: String,
     entrypoint: String,
     backend: String,
     adapter_name: String,
-    device_path: Option<String>,
     workgroups: [u32; 3],
     invocations: u32,
     checksum: u64,
@@ -96,6 +109,9 @@ struct ExecuteRequest<'a> {
 
 #[link(wasm_import_module = "webgpu")]
 unsafe extern "C" {
+    #[link_name = "describe_runtime"]
+    fn webgpu_describe_runtime(output_ptr: *mut u8, output_cap: i32) -> i32;
+
     #[link_name = "execute"]
     fn webgpu_execute(
         request_ptr: *const u8,
@@ -135,21 +151,22 @@ fn main() {
         process::exit(2);
     });
     validate_model(&model, &model_path);
+    let runtime = describe_runtime().unwrap_or_else(|err| {
+        eprintln!("failed to query webgpu runtime: {err}");
+        process::exit(3);
+    });
 
     let response = classify_via_webgpu(&model, &image_bytes).unwrap_or_else(|err| {
         eprintln!("classification failed: {err}");
-        process::exit(3);
+        process::exit(4);
     });
 
     println!("input.image={image_path}");
     println!("input.model={model_path}");
+    print_runtime(&runtime);
     println!("runtime.task={}", response.task);
     println!("runtime.backend={}", response.dispatch.backend);
     println!("runtime.adapter_name={}", response.dispatch.adapter_name);
-    println!(
-        "runtime.device_path={}",
-        response.dispatch.device_path.as_deref().unwrap_or("unset")
-    );
     println!(
         "image.dimensions={}x{}",
         response.image_width, response.image_height
@@ -188,6 +205,24 @@ fn main() {
     }
 
     println!("prediction.model={}", response.model);
+}
+
+fn describe_runtime() -> Result<RuntimeDescription, String> {
+    let mut output = vec![0u8; OUTPUT_BUFFER_SIZE];
+    let written = unsafe {
+        webgpu_describe_runtime(
+            output.as_mut_ptr(),
+            i32::try_from(output.len()).map_err(|_| "output buffer too large")?,
+        )
+    };
+
+    if written < 0 {
+        return Err("webgpu.describe_runtime returned an error".to_string());
+    }
+
+    let written = usize::try_from(written).map_err(|_| "invalid runtime description size")?;
+    serde_json::from_slice::<RuntimeDescription>(&output[..written])
+        .map_err(|err| format!("invalid runtime description json: {err}"))
 }
 
 fn classify_via_webgpu(
@@ -340,6 +375,22 @@ fn encode_f32_slice(values: &[f32]) -> Vec<u8> {
         .iter()
         .flat_map(|value| value.to_le_bytes())
         .collect()
+}
+
+fn print_runtime(runtime: &RuntimeDescription) {
+    println!("webgpu.enabled={}", runtime.enabled);
+    println!("webgpu.required={}", runtime.required);
+    println!("webgpu.backend={}", runtime.backend);
+    println!("webgpu.adapter_name={}", runtime.adapter_name);
+    println!("webgpu.device_available={}", runtime.device_available);
+    println!("webgpu.runtime_ready={}", runtime.runtime_ready);
+    println!(
+        "webgpu.runtime_error={}",
+        runtime.runtime_error.as_deref().unwrap_or("none")
+    );
+    println!("webgpu.max_buffer_size={}", runtime.max_buffer_size);
+    println!("webgpu.max_bind_groups={}", runtime.max_bind_groups);
+    println!("webgpu.fallback_adapter={}", runtime.force_fallback_adapter);
 }
 
 fn validate_model(model: &DemoModel, model_path: &str) {

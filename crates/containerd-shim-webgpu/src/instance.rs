@@ -6,7 +6,9 @@ use std::str::FromStr;
 use anyhow::{Context, Result};
 use containerd_shim_wasm::sandbox::Sandbox;
 use containerd_shim_wasm::sandbox::context::{Entrypoint, RuntimeContext};
-use containerd_shim_wasm::shim::{Shim, Version, version};
+use containerd_shim_wasm::shim::{InstanceGuard, Shim, Version, version};
+use containerd_shimkit::sandbox::InstanceConfig;
+use oci_spec::runtime::Spec;
 use wasmedge_sdk::AsInstance;
 use wasmedge_sdk::config::{CommonConfigOptions, Config, ConfigBuilder};
 #[cfg(all(feature = "plugin", not(target_env = "musl")))]
@@ -44,6 +46,14 @@ impl Shim for WasmEdgeWebGpuShim {
         version!()
     }
 
+    async fn prepare_instance(
+        id: &str,
+        cfg: &InstanceConfig,
+        spec: &mut Spec,
+    ) -> Result<Option<Box<dyn InstanceGuard>>> {
+        crate::broker::prepare_instance(id, cfg, spec).await
+    }
+
     type Sandbox = WasmEdgeWebGpuSandbox;
 }
 
@@ -72,10 +82,12 @@ impl Sandbox for WasmEdgeWebGpuSandbox {
         let prefix = "WASMEDGE_";
         // Mirror explicit WasmEdge host configuration into the process environment before
         // instantiating the VM so native WasmEdge options still behave as expected.
-        for env in envs.iter().filter(|env| env.starts_with(prefix)) {
+        for env in envs.iter() {
             if let Some((key, value)) = env.split_once('=') {
-                unsafe {
-                    env::set_var(key, value);
+                if key.starts_with(prefix) {
+                    unsafe {
+                        env::set_var(key, value);
+                    }
                 }
             }
         }
@@ -105,9 +117,7 @@ impl Sandbox for WasmEdgeWebGpuSandbox {
 
         let mut webgpu_host = host::build_import(middleware.config())
             .context("creating WebGPU host import module")?;
-        let webgpu_name = webgpu_host
-            .name()
-            .unwrap_or_else(|| "webgpu".to_string());
+        let webgpu_name = webgpu_host.name().unwrap_or_else(|| "webgpu".to_string());
         instances.insert(webgpu_name, &mut webgpu_host);
 
         // Keep filesystem exposure intentionally simple for now. Tight isolation can be layered
@@ -123,7 +133,8 @@ impl Sandbox for WasmEdgeWebGpuSandbox {
         let module = Module::from_bytes(Some(&self.config), &wasm_bytes)?;
         let mod_name = name.unwrap_or_else(|| "main".to_string());
         {
-            let store = Store::new(Some(&self.config), instances).context("creating WasmEdge store")?;
+            let store =
+                Store::new(Some(&self.config), instances).context("creating WasmEdge store")?;
             let mut vm = Vm::new(store);
             vm.register_module(Some(&mod_name), module)
                 .context("registering module")?;

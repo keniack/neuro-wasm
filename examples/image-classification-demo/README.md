@@ -6,6 +6,7 @@ The workload:
 
 - takes the image path as the first CLI argument
 - optionally takes a model path as the second CLI argument
+- calls `webgpu.describe_runtime` to query the effective shim-side runtime
 - reads the model and image bytes inside the guest
 - decodes the image and builds a small feature tensor in the guest
 - calls the generic shim-provided `webgpu.execute` host import with a `compute.dispatch` request
@@ -115,3 +116,5 @@ The OCI image defaults to:
 ```terminal
 /images/red-apple.ppm /models/resnet50-demo.json
 ```
+
+This image stays `scratch`. The WebGPU shim keeps Vulkan on the host side and brokers WebGPU requests from the guest over an internal Unix socket; host-only settings such as `WEBGPU_DEVICE_PATH` are not forwarded into the guest Wasm environment. If the shim still logs `libvulkan.so.1: cannot open shared object file` or `missing Vulkan entry points`, install the Vulkan loader on the host that runs `containerd-shim-webgpu-v1`, for example `sudo apt-get install libvulkan1 vulkan-tools`, then check `vulkaninfo --summary`.

@@ -101,6 +101,8 @@ For Linux/Vulkan:
 2. Verify the host GPU with `vulkaninfo --summary`.
 3. Expose the render node into the runtime, for example `/dev/dri/renderD128`.
 
+The shim keeps the native GPU stack on the host side and brokers WebGPU requests from the guest over an internal Unix socket. `scratch` Wasm images do not need host Vulkan libraries inside the container, and host-only settings such as `WEBGPU_DEVICE_PATH` stay in the shim instead of being forwarded into the guest Wasm environment. If the shim still logs `libvulkan.so.1: cannot open shared object file` or `missing Vulkan entry points`, the Vulkan loader is missing on the host. Install `libvulkan1` and the vendor driver on the machine running `containerd`.
+
 The current containerd integration still has to be built and run on Linux because the upstream `containerd-shim-wasm` stack depends on Linux-only components such as `procfs`. The `wgpu` execution layer itself is generic and can target Metal or DX12 once the surrounding shim stack is portable.
 
 ## Debugging

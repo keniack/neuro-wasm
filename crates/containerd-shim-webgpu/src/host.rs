@@ -1,3 +1,4 @@
+use std::env;
 use std::sync::{Arc, OnceLock};
 
 use anyhow::{Context, Result, anyhow, bail};
@@ -13,8 +14,9 @@ const DESCRIBE_RUNTIME_FN: &str = "describe_runtime";
 const EXECUTE_FN: &str = "execute";
 
 #[derive(Clone)]
-pub struct WebGpuHostState {
+pub(crate) struct WebGpuHostState {
     config: WebGpuConfig,
+    broker_addr: Option<String>,
     // Reuse a single native device/queue across guest host calls inside the sandbox.
     runtime: Arc<OnceLock<Arc<WebGpuRuntime>>>,
 }
@@ -100,14 +102,8 @@ struct DispatchResponse {
 }
 
 pub fn build_import(config: &WebGpuConfig) -> Result<ImportObject<WebGpuHostState>> {
-    let mut builder = ImportObjectBuilder::new(
-        WEBGPU_IMPORT_MODULE,
-        WebGpuHostState {
-            config: config.clone(),
-            runtime: Arc::new(OnceLock::new()),
-        },
-    )
-    .context("creating WebGPU import module")?;
+    let mut builder = ImportObjectBuilder::new(WEBGPU_IMPORT_MODULE, WebGpuHostState::new(config))
+        .context("creating WebGPU import module")?;
 
     builder
         .with_func::<(i32, i32), i32>(DESCRIBE_RUNTIME_FN, describe_runtime)
@@ -126,11 +122,11 @@ fn describe_runtime(
     params: Vec<WasmValue>,
 ) -> Result<Vec<WasmValue>, CoreError> {
     let [out_ptr, out_cap] = params_as_i32::<2>(&params).map_err(host_error)?;
-    let description = runtime_description(state);
-
-    let encoded = serde_json::to_vec(&description)
-        .context("serializing runtime description")
-        .map_err(|err| host_error(err.to_string()))?;
+    let encoded = match state.broker_addr.as_deref() {
+        Some(addr) => crate::broker::describe_runtime(addr),
+        None => describe_runtime_payload(state),
+    }
+    .map_err(|err| host_error(err.to_string()))?;
     write_guest_bytes(frame, out_ptr, out_cap, &encoded)
         .map_err(|err| host_error(err.to_string()))?;
 
@@ -144,8 +140,6 @@ fn execute(
     frame: &mut CallingFrame,
     params: Vec<WasmValue>,
 ) -> Result<Vec<WasmValue>, CoreError> {
-    validate_runtime_access(&state.config)?;
-
     let [
         request_ptr,
         request_len,
@@ -159,25 +153,13 @@ fn execute(
 
     let request_bytes = read_guest_bytes(frame, request_ptr, request_len)
         .map_err(|err| host_error(err.to_string()))?;
-    let request: WebGpuExecutionRequest = serde_json::from_slice(&request_bytes)
-        .context("parsing execution request")
-        .map_err(|err| host_error(err.to_string()))?;
-
     let input_a = read_guest_bytes(frame, input_a_ptr, input_a_len)
         .map_err(|err| host_error(err.to_string()))?;
     let input_b = read_guest_bytes(frame, input_b_ptr, input_b_len)
         .map_err(|err| host_error(err.to_string()))?;
-    let runtime = ensure_runtime(state).map_err(|err| host_error(err.to_string()))?;
-
-    let encoded = match request.kind.as_str() {
-        "compute.dispatch" => execute_dispatch(
-            &state.config,
-            runtime.as_ref(),
-            &request,
-            &input_a,
-            &input_b,
-        ),
-        other => Err(anyhow!("unsupported webgpu execution kind: {other}")),
+    let encoded = match state.broker_addr.as_deref() {
+        Some(addr) => crate::broker::execute(addr, &request_bytes, &input_a, &input_b),
+        None => execute_payload(state, &request_bytes, &input_a, &input_b),
     }
     .map_err(|err| host_error(err.to_string()))?;
 
@@ -193,7 +175,7 @@ fn runtime_description(state: &WebGpuHostState) -> WebGpuRuntimeDescription {
             enabled: false,
             backend: state.config.backend.clone(),
             adapter_name: state.config.adapter_name.clone(),
-            device_path: state.config.device_path.clone(),
+            device_path: None,
             device_available: false,
             runtime_ready: false,
             runtime_error: None,
@@ -210,7 +192,7 @@ fn runtime_description(state: &WebGpuHostState) -> WebGpuRuntimeDescription {
             enabled: true,
             backend: runtime.backend.clone(),
             adapter_name: runtime.adapter_name.clone(),
-            device_path: state.config.device_path.clone(),
+            device_path: None,
             device_available: true,
             runtime_ready: true,
             runtime_error: None,
@@ -223,7 +205,7 @@ fn runtime_description(state: &WebGpuHostState) -> WebGpuRuntimeDescription {
             enabled: true,
             backend: state.config.backend.clone(),
             adapter_name: state.config.adapter_name.clone(),
-            device_path: state.config.device_path.clone(),
+            device_path: None,
             device_available: false,
             runtime_ready: false,
             runtime_error: Some(err.to_string()),
@@ -232,6 +214,50 @@ fn runtime_description(state: &WebGpuHostState) -> WebGpuRuntimeDescription {
             force_fallback_adapter: state.config.force_fallback_adapter,
             required: state.config.required,
         },
+    }
+}
+
+impl WebGpuHostState {
+    fn new(config: &WebGpuConfig) -> Self {
+        Self {
+            config: config.clone(),
+            broker_addr: env::var(crate::broker::BROKER_ADDR_ENV)
+                .ok()
+                .filter(|value| !value.is_empty()),
+            runtime: Arc::new(OnceLock::new()),
+        }
+    }
+
+    pub(crate) fn direct(config: &WebGpuConfig) -> Self {
+        Self {
+            config: config.clone(),
+            broker_addr: None,
+            runtime: Arc::new(OnceLock::new()),
+        }
+    }
+}
+
+pub(crate) fn describe_runtime_payload(state: &WebGpuHostState) -> Result<Vec<u8>> {
+    serde_json::to_vec(&runtime_description(state)).context("serializing runtime description")
+}
+
+pub(crate) fn execute_payload(
+    state: &WebGpuHostState,
+    request_bytes: &[u8],
+    input_a: &[u8],
+    input_b: &[u8],
+) -> Result<Vec<u8>> {
+    validate_runtime_access(&state.config)
+        .map_err(|err| anyhow!("runtime access denied: {err:?}"))?;
+    let request: WebGpuExecutionRequest =
+        serde_json::from_slice(request_bytes).context("parsing execution request")?;
+    let runtime = ensure_runtime(state)?;
+
+    match request.kind.as_str() {
+        "compute.dispatch" => {
+            execute_dispatch(&state.config, runtime.as_ref(), &request, input_a, input_b)
+        }
+        other => Err(anyhow!("unsupported webgpu execution kind: {other}")),
     }
 }
 
@@ -288,7 +314,7 @@ fn execute_dispatch(
         entrypoint: dispatch_entrypoint(request).to_string(),
         backend: runtime.backend.clone(),
         adapter_name: runtime.adapter_name.clone(),
-        device_path: config.device_path.clone(),
+        device_path: None,
         workgroups,
         invocations,
         checksum,

@@ -1,11 +1,17 @@
 use std::hash::Hash;
 
 use anyhow::Result;
+use containerd_shimkit::sandbox::InstanceConfig;
 #[doc(inline)]
 pub use containerd_shimkit::sandbox::cli::Version;
+use oci_spec::runtime::Spec;
 
 use crate::sandbox::Sandbox;
 use crate::sandbox::context::WasmLayer;
+
+pub trait InstanceGuard: Send + Sync {}
+
+impl<T: Send + Sync> InstanceGuard for T {}
 
 /// The `Shim` trait provides a simplified API for running WebAssembly containers.
 ///
@@ -42,6 +48,17 @@ pub trait Shim: Sync + 'static {
             "application/vnd.bytecodealliance.wasm.component.layer.v0+wasm",
             "application/wasm",
         ]
+    }
+
+    /// Gives a runtime a chance to prepare per-instance state before the container process starts.
+    /// This can be used to inject environment variables into the OCI spec and keep host-side state
+    /// alive for the lifetime of the container, such as a broker owned by the outer shim process.
+    async fn prepare_instance(
+        _id: &str,
+        _cfg: &InstanceConfig,
+        _spec: &mut Spec,
+    ) -> Result<Option<Box<dyn InstanceGuard>>> {
+        async move { Ok(None) }
     }
 }
 

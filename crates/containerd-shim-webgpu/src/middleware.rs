@@ -2,6 +2,11 @@ use std::path::Path;
 
 use anyhow::{Result, bail};
 
+const HOST_ONLY_GUEST_ENV_KEYS: &[&str] = &[
+    "WEBGPU_DEVICE_PATH",
+    "WGPU_DEVICE_PATH",
+    crate::broker::BROKER_ADDR_ENV,
+];
 const DEFAULT_WEBGPU_ADAPTER_NAME: &str = "default";
 const DEFAULT_WEBGPU_BACKEND: &str = "auto";
 const DEFAULT_MAX_BUFFER_SIZE: u64 = 128 * 1024 * 1024;
@@ -84,7 +89,15 @@ impl WebGpuMiddleware {
     }
 
     pub fn guest_envs(&self, envs: &[String]) -> Vec<String> {
-        let mut merged = envs.to_vec();
+        let mut merged = envs
+            .iter()
+            .filter(|env| {
+                HOST_ONLY_GUEST_ENV_KEYS
+                    .iter()
+                    .all(|key| !env.starts_with(&format!("{key}=")))
+            })
+            .cloned()
+            .collect::<Vec<_>>();
 
         // Mirror the normalized host configuration back into the guest so a wasm workload can
         // inspect the effective backend choice without re-implementing host-side detection.
@@ -126,11 +139,6 @@ impl WebGpuMiddleware {
             "WGPU_ADAPTER_NAME",
             self.config.adapter_name.clone(),
         );
-
-        if let Some(device_path) = self.config.device_path.as_deref() {
-            ensure_env(&mut merged, "WEBGPU_DEVICE_PATH", device_path.to_string());
-            ensure_env(&mut merged, "WGPU_DEVICE_PATH", device_path.to_string());
-        }
 
         merged
     }
@@ -241,6 +249,36 @@ mod tests {
                 .any(|env| env.starts_with("WEBGPU_MAX_BUFFER_SIZE="))
         );
         assert!(merged.iter().any(|env| env.starts_with("WGPU_BACKEND=")));
+
+        Ok(())
+    }
+
+    #[test]
+    fn guest_envs_strip_host_only_values() -> Result<()> {
+        let envs = vec![
+            "WEBGPU_DEVICE_PATH=/dev/dri/renderD128".to_string(),
+            "WGPU_DEVICE_PATH=/dev/dri/renderD128".to_string(),
+            format!("{}=broker-name", crate::broker::BROKER_ADDR_ENV),
+        ];
+
+        let middleware = WebGpuMiddleware::new(&envs)?;
+        let merged = middleware.guest_envs(&envs);
+
+        assert!(
+            merged
+                .iter()
+                .all(|env| !env.starts_with("WEBGPU_DEVICE_PATH="))
+        );
+        assert!(
+            merged
+                .iter()
+                .all(|env| !env.starts_with("WGPU_DEVICE_PATH="))
+        );
+        assert!(
+            merged
+                .iter()
+                .all(|env| !env.starts_with(&format!("{}=", crate::broker::BROKER_ADDR_ENV)))
+        );
 
         Ok(())
     }

@@ -61,7 +61,7 @@ The Wasm module builds on macOS, but the native containerd shim currently has to
 
 Import the local OCI tar and start it with the WebGPU shim:
 
-Do not append `dispatch 16` after the container name here. With `ctr run`, any extra arguments override the image entrypoint, so the shim would try to execute `dispatch` as the program. If you need to override it explicitly, pass `/webgpu-demo.wasm dispatch 16`.
+Use the explicit Wasm path form with `ctr run`. That makes the intended guest argv unambiguous: `["/webgpu-demo.wasm", "dispatch", "16"]`.
 
 ```terminal
 sudo ctr images import --all-platforms target/wasm32-wasip1/debug/webgpu-demo-img.tar
@@ -73,7 +73,8 @@ sudo ctr run --rm \
   --env WEBGPU_BACKEND=vulkan \
   --env WEBGPU_DEVICE_PATH=/dev/dri/renderD128 \
   docker.io/keniack/webgpu-demo:local \
-  webgpu-demo
+  webgpu-demo \
+  /webgpu-demo.wasm dispatch 16
 ```
 
 Or pull the pushed registry image and run it directly:
@@ -88,5 +89,8 @@ sudo ctr run --rm \
   --env WEBGPU_BACKEND=vulkan \
   --env WEBGPU_DEVICE_PATH=/dev/dri/renderD128 \
   docker.io/keniack/webgpu-demo:latest \
-  webgpu-demo
+  webgpu-demo \
+  /webgpu-demo.wasm dispatch 16
 ```
+
+This image stays `scratch`. The WebGPU shim keeps Vulkan on the host side and brokers WebGPU requests from the guest over an internal Unix socket; host-only settings such as `WEBGPU_DEVICE_PATH` are not forwarded into the guest Wasm environment. If the shim still logs `libvulkan.so.1: cannot open shared object file` or `missing Vulkan entry points`, install the Vulkan loader on the host that runs `containerd-shim-webgpu-v1`, for example `sudo apt-get install libvulkan1 vulkan-tools`, then check `vulkaninfo --summary`.

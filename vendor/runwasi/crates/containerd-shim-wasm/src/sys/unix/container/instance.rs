@@ -24,6 +24,7 @@ pub struct Instance<S: Shim> {
     exit_code: WaitableCell<(u32, DateTime<Utc>)>,
     container: Container,
     id: String,
+    _guard: Option<Box<dyn crate::shim::InstanceGuard>>,
     _phantom: PhantomData<S>,
 }
 
@@ -87,13 +88,21 @@ impl<S: Shim> SandboxInstance for Instance<S> {
                 "No OCI wasm layers loaded for container {id}; the executor will attempt file entrypoint resolution inside the mounted container rootfs"
             );
         } else {
-            log::info!("Loaded {} OCI wasm layer(s) for container {id}", modules.len());
+            log::info!(
+                "Loaded {} OCI wasm layer(s) for container {id}",
+                modules.len()
+            );
         }
+
+        let source_spec_path = cfg.bundle.join("config.json");
+        let mut spec = Spec::load(&source_spec_path)?;
+        let guard = S::prepare_instance(&id, cfg, &mut spec).await?;
+        spec.save(&source_spec_path)?;
 
         let container = Container::build(
             |(id, cfg, modules)| {
                 let source_spec_path = cfg.bundle.join("config.json");
-                let spec = Spec::load(source_spec_path)?;
+                let spec = Spec::load(&source_spec_path)?;
                 log::info!("building container {} from bundle {:?}", id, cfg.bundle);
                 let pod_id = pod_id(&spec);
 
@@ -133,6 +142,7 @@ impl<S: Shim> SandboxInstance for Instance<S> {
             id,
             exit_code: WaitableCell::new(),
             container,
+            _guard: guard,
             _phantom: Default::default(),
         })
     }

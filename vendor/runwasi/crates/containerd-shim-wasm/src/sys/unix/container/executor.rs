@@ -165,7 +165,9 @@ fn is_linux_container(ctx: &impl RuntimeContext) -> Result<()> {
         candidates
     );
 
-    let executable = candidates.into_iter().find_map(|p| -> Option<PathBuf> {
+    let executable = candidates
+        .into_iter()
+        .find_map(|p| -> Option<PathBuf> {
             let mode = p.metadata().ok()?.permissions().mode();
             (mode & 0o001 != 0).then_some(p)
         })

@@ -1,7 +1,7 @@
 # Examples
 
 - `webgpu-demo` - sends a real WGSL vector-add kernel through the generic `webgpu.execute` dispatch API and prints the GPU-computed output tensor.
-- `image-classification-demo` - loads a lightweight model and an input image, then runs a real GPU matrix-vector inference pass through the same generic dispatch API.
+- `image-classification-demo` - queries `webgpu.describe_runtime`, then loads a lightweight model and an input image and runs a real GPU matrix-vector inference pass through the same generic dispatch API.
 
 ## Build
 
@@ -71,7 +71,7 @@ sudo ctr images import --all-platforms target/wasm32-wasip1/debug/image-classifi
 
 Run `webgpu-demo`:
 
-Do not append `dispatch 16` after the container name in this form. `ctr run` treats extra arguments as an entrypoint override; if you need an explicit override, use `/webgpu-demo.wasm dispatch 16`.
+Use the explicit Wasm path form with `ctr run`. It matches the argv the guest expects and avoids accidental entrypoint overrides.
 
 ```terminal
 sudo ctr run --rm \
@@ -81,7 +81,8 @@ sudo ctr run --rm \
   --env WEBGPU_BACKEND=vulkan \
   --env WEBGPU_DEVICE_PATH=/dev/dri/renderD128 \
   docker.io/keniack/webgpu-demo:local \
-  webgpu-demo
+  webgpu-demo \
+  /webgpu-demo.wasm dispatch 16
 ```
 
 Run `image-classification-demo`:
@@ -103,6 +104,8 @@ Or pull the pushed registry images and run those directly:
 sudo ctr images pull docker.io/keniack/webgpu-demo:latest
 sudo ctr images pull docker.io/keniack/image-classification-demo:latest
 ```
+
+These example images stay `scratch`. The WebGPU shim keeps Vulkan on the host side and brokers WebGPU requests from the guest over an internal Unix socket; host-only settings such as `WEBGPU_DEVICE_PATH` are not forwarded into the guest Wasm environment. If the shim still logs `libvulkan.so.1: cannot open shared object file` or `missing Vulkan entry points`, install the Vulkan loader on the host that runs `containerd-shim-webgpu-v1`, for example `sudo apt-get install libvulkan1 vulkan-tools`.
 
 The image classification OCI bundle defaults to:
 

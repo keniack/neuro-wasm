@@ -120,7 +120,7 @@ Run workloads with the runtime name `io.containerd.webgpu.v1`.
 
 Example on Linux/Vulkan:
 
-Do not append `dispatch 16` after the container name in this form. `ctr run` treats extra arguments as an entrypoint override; if you need to override it explicitly, pass `/webgpu-demo.wasm dispatch 16`.
+With `ctr run`, the most reliable form is to pass the Wasm path explicitly after the container ID. That preserves the intended argv inside the guest and avoids confusion around `ENTRYPOINT`/`CMD` overrides.
 
 ```terminal
 sudo ctr images pull docker.io/keniack/webgpu-demo:latest
@@ -132,8 +132,11 @@ sudo ctr run --rm \
   --env WEBGPU_BACKEND=vulkan \
   --env WEBGPU_DEVICE_PATH=/dev/dri/renderD128 \
   docker.io/keniack/webgpu-demo:latest \
-  webgpu-demo
+  webgpu-demo \
+  /webgpu-demo.wasm dispatch 16
 ```
+
+The WebGPU shim keeps the native GPU stack on the host side and brokers WebGPU requests from the guest over an internal Unix socket. `scratch` images do not need host Vulkan libraries inside the container, and host-only settings such as `WEBGPU_DEVICE_PATH` are consumed by the shim instead of being forwarded into the guest Wasm environment. If the shim still logs `libvulkan.so.1: cannot open shared object file` or `missing Vulkan entry points`, the Vulkan loader or driver is missing on the host itself. Install the host package first, for example `sudo apt-get install libvulkan1 vulkan-tools`, then verify with `vulkaninfo --summary`.
 
 Useful environment variables:
 
