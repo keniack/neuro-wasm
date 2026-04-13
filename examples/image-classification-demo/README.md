@@ -83,10 +83,10 @@ This workload depends on the shim-provided `webgpu` host import module, so run i
 
 The Wasm module builds on macOS, but the native containerd shim currently has to be built and run on Linux.
 
-Import the OCI tar and run the pre-bundled demo image:
+Import the local OCI tar and run the pre-bundled demo image:
 
 ```terminal
-sudo ctr images import target/wasm32-wasip1/debug/image-classification-demo-img.tar
+sudo ctr images import --all-platforms target/wasm32-wasip1/debug/image-classification-demo-img.tar
 
 sudo ctr run --rm \
   --runtime=io.containerd.webgpu.v1 \
@@ -94,7 +94,22 @@ sudo ctr run --rm \
   --env WEBGPU_REQUIRED=1 \
   --env WEBGPU_BACKEND=vulkan \
   --env WEBGPU_DEVICE_PATH=/dev/dri/renderD128 \
-  ghcr.io/containerd/runwasi/image-classification-demo:local \
+  docker.io/keniack/image-classification-demo:local \
+  image-classification-demo
+```
+
+Or pull the pushed registry image and run it directly:
+
+```terminal
+sudo ctr images pull docker.io/keniack/image-classification-demo:latest
+
+sudo ctr run --rm \
+  --runtime=io.containerd.webgpu.v1 \
+  --env WEBGPU_ENABLED=1 \
+  --env WEBGPU_REQUIRED=1 \
+  --env WEBGPU_BACKEND=vulkan \
+  --env WEBGPU_DEVICE_PATH=/dev/dri/renderD128 \
+  docker.io/keniack/image-classification-demo:latest \
   image-classification-demo
 ```
 

@@ -62,10 +62,10 @@ This workload depends on the shim-provided `webgpu` host import module, so run i
 
 The Wasm module builds on macOS, but the native containerd shim currently has to be built and run on Linux.
 
-Import the OCI tar and start it with the WebGPU shim:
+Import the local OCI tar and start it with the WebGPU shim:
 
 ```terminal
-sudo ctr images import target/wasm32-wasip1/debug/webgpu-demo-img.tar
+sudo ctr images import --all-platforms target/wasm32-wasip1/debug/webgpu-demo-img.tar
 
 sudo ctr run --rm \
   --runtime=io.containerd.webgpu.v1 \
@@ -73,6 +73,21 @@ sudo ctr run --rm \
   --env WEBGPU_REQUIRED=1 \
   --env WEBGPU_BACKEND=vulkan \
   --env WEBGPU_DEVICE_PATH=/dev/dri/renderD128 \
-  ghcr.io/containerd/runwasi/webgpu-demo:local \
+  docker.io/keniack/webgpu-demo:local \
+  webgpu-demo dispatch 16
+```
+
+Or pull the pushed registry image and run it directly:
+
+```terminal
+sudo ctr images pull docker.io/keniack/webgpu-demo:latest
+
+sudo ctr run --rm \
+  --runtime=io.containerd.webgpu.v1 \
+  --env WEBGPU_ENABLED=1 \
+  --env WEBGPU_REQUIRED=1 \
+  --env WEBGPU_BACKEND=vulkan \
+  --env WEBGPU_DEVICE_PATH=/dev/dri/renderD128 \
+  docker.io/keniack/webgpu-demo:latest \
   webgpu-demo dispatch 16
 ```

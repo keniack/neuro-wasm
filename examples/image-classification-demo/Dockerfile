@@ -15,5 +15,5 @@ COPY --from=builder /workspace/target/wasm32-wasip1/release/image-classification
 COPY --from=builder /workspace/examples/image-classification-demo/images /images
 COPY --from=builder /workspace/examples/image-classification-demo/models /models
 
-ENTRYPOINT ["/image-classification-demo.wasm"]
+ENTRYPOINT ["./image-classification-demo.wasm"]
 CMD ["/images/red-apple.ppm", "/models/resnet50-demo.json"]

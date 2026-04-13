@@ -35,7 +35,7 @@ fn main() {
     builder.add_layer(&layer_path);
 
     let config = spec::ConfigBuilder::default()
-        .entrypoint(vec!["/webgpu-demo.wasm".to_owned()])
+        .entrypoint(vec!["./webgpu-demo.wasm".to_owned()])
         .build()
         .unwrap();
 
@@ -56,7 +56,7 @@ fn main() {
 
     builder.add_config(
         img,
-        "ghcr.io/containerd/runwasi/webgpu-demo:local".to_string(),
+        "docker.io/keniack/webgpu-demo:local".to_string(),
     );
 
     let image_tar = out_dir.join("webgpu-demo-img.tar");

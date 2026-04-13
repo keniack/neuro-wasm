@@ -58,7 +58,7 @@ fn main() {
 
     let config = spec::ConfigBuilder::default()
         .entrypoint(vec![
-            "/image-classification-demo.wasm".to_owned(),
+            "./image-classification-demo.wasm".to_owned(),
             "/images/red-apple.ppm".to_owned(),
             "/models/resnet50-demo.json".to_owned(),
         ])
@@ -82,7 +82,7 @@ fn main() {
 
     builder.add_config(
         img,
-        "ghcr.io/containerd/runwasi/image-classification-demo:local".to_string(),
+        "docker.io/keniack/image-classification-demo:local".to_string(),
     );
 
     let image_tar = out_dir.join("image-classification-demo-img.tar");

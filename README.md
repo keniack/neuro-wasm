@@ -116,13 +116,15 @@ Run workloads with the runtime name `io.containerd.webgpu.v1`.
 Example on Linux/Vulkan:
 
 ```terminal
+sudo ctr images pull docker.io/keniack/webgpu-demo:latest
+
 sudo ctr run --rm \
   --runtime=io.containerd.webgpu.v1 \
   --env WEBGPU_ENABLED=1 \
   --env WEBGPU_REQUIRED=1 \
   --env WEBGPU_BACKEND=vulkan \
   --env WEBGPU_DEVICE_PATH=/dev/dri/renderD128 \
-  ghcr.io/containerd/runwasi/webgpu-demo:local \
+  docker.io/keniack/webgpu-demo:latest \
   webgpu-demo dispatch 16
 ```
 
@@ -136,6 +138,28 @@ Useful environment variables:
 - `WEBGPU_MAX_BUFFER_SIZE=<bytes>`
 - `WEBGPU_MAX_BIND_GROUPS=<count>`
 - `WEBGPU_FORCE_FALLBACK_ADAPTER=1|0`
+
+## Debugging
+
+If `ctr run` fails during shim startup, inspect the containerd logs on the host:
+
+```terminal
+sudo journalctl -u containerd -f
+```
+
+Or, for recent shim errors only:
+
+```terminal
+sudo journalctl -u containerd --since "10 minutes ago" | grep -E "webgpu|runwasi|wasm workload probe|linux workload probe|can't handle spec"
+```
+
+The vendored shim now logs:
+
+- whether OCI wasm layers were loaded for the container
+- the entrypoint, args, module name, and resolved file candidates
+- whether the runtime classified the workload as Linux or Wasm
+- the concrete reason a `can't handle spec` decision was made
+- the bundle path used to build the container
 
 ## Integration Contract
 

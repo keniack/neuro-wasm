@@ -44,8 +44,16 @@ impl<S: Shim> LibcontainerExecutor for Executor<S> {
     #[cfg_attr(feature = "tracing", tracing::instrument(skip(self), level = "Debug"))]
     fn validate(&self, spec: &Spec) -> Result<(), ExecutorValidationError> {
         // We can handle linux container. We delegate wasm container to the engine.
+        let ctx = self.ctx(spec);
         match self.ty(spec) {
-            ExecutorType::CantHandle => Err(ExecutorValidationError::CantHandle(S::name())),
+            ExecutorType::CantHandle => {
+                log::error!(
+                    "{} executor can't handle spec: {}",
+                    S::name(),
+                    ctx_summary(&ctx)
+                );
+                Err(ExecutorValidationError::CantHandle(S::name()))
+            }
             _ => Ok(()),
         }
     }
@@ -106,16 +114,28 @@ impl<S: Shim> Executor<S> {
     fn ty(&self, spec: &Spec) -> &ExecutorType<S> {
         self.0.ty.get_or_init(|| {
             let ctx = &self.ctx(spec);
+            log::debug!("evaluating container type for {}: {}", S::name(), ctx_summary(ctx));
             match is_linux_container(ctx) {
-                Ok(_) => ExecutorType::Linux,
+                Ok(_) => {
+                    log::debug!("container recognized as linux workload: {}", ctx_summary(ctx));
+                    ExecutorType::Linux
+                }
                 Err(err) => {
-                    log::debug!("error checking if linux container: {err}. Fallback to wasm container");
+                    log::debug!(
+                        "linux workload probe failed: {err}. Falling back to wasm container. {}",
+                        ctx_summary(ctx)
+                    );
                     let container = S::Sandbox::default();
                     match container.can_handle(ctx).block_on() {
-                        Ok(_) => ExecutorType::Wasm(container),
+                        Ok(_) => {
+                            log::info!("container recognized as wasm workload: {}", ctx_summary(ctx));
+                            ExecutorType::Wasm(container)
+                        }
                         Err(err) => {
-                            // log an error and return
-                            log::error!("error checking if wasm container: {err}. Note: arg0 must be a path to a Wasm file");
+                            log::error!(
+                                "wasm workload probe failed: {err}. {}. Note: arg0 must be a path to a Wasm file or the image must expose OCI wasm layers",
+                                ctx_summary(ctx)
+                            );
                             ExecutorType::CantHandle
                         }
                     }
@@ -126,16 +146,26 @@ impl<S: Shim> Executor<S> {
 }
 
 fn is_linux_container(ctx: &impl RuntimeContext) -> Result<()> {
-    if let Source::Oci(_) = ctx.entrypoint().source {
+    let entrypoint = ctx.entrypoint();
+
+    if let Source::Oci(layers) = &entrypoint.source {
+        log::debug!(
+            "linux workload probe rejected because OCI wasm layers were present: layers={}, {}",
+            layers.len(),
+            ctx_summary(ctx)
+        );
         bail!("the entry point contains wasm layers")
     };
 
-    let executable = ctx
-        .entrypoint()
-        .arg0
-        .context("no entrypoint provided")?
-        .resolve_in_path()
-        .find_map(|p| -> Option<PathBuf> {
+    let arg0 = entrypoint.arg0.context("no entrypoint provided")?;
+    let candidates = arg0.resolve_in_path().collect::<Vec<_>>();
+    log::debug!(
+        "linux workload probe resolved executable candidates for {:?}: {:?}",
+        arg0,
+        candidates
+    );
+
+    let executable = candidates.into_iter().find_map(|p| -> Option<PathBuf> {
             let mode = p.metadata().ok()?.permissions().mode();
             (mode & 0o001 != 0).then_some(p)
         })
@@ -145,10 +175,28 @@ fn is_linux_container(ctx: &impl RuntimeContext) -> Result<()> {
     // https://en.wikipedia.org/wiki/Executable_and_Linkable_Format#File_header
     let mut buffer = [0; 4];
     File::open(executable)?.read_exact(&mut buffer)?;
+    log::debug!("linux workload probe header bytes: {:02x?}", buffer);
 
     match buffer {
         [0x7f, 0x45, 0x4c, 0x46] => Ok(()), // ELF magic number
         [0x23, 0x21, ..] => Ok(()),         // shebang
         _ => bail!("not a valid script or elf file"),
     }
+}
+
+fn ctx_summary(ctx: &impl RuntimeContext) -> String {
+    let entrypoint = ctx.entrypoint();
+    let source = match &entrypoint.source {
+        Source::File(path) => format!("file={}", path.display()),
+        Source::Oci(layers) => format!("oci_layers={}", layers.len()),
+    };
+
+    format!(
+        "args={:?}, func={}, module={:?}, arg0={:?}, {}",
+        ctx.args(),
+        entrypoint.func,
+        entrypoint.name,
+        entrypoint.arg0,
+        source
+    )
 }

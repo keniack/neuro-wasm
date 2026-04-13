@@ -13,5 +13,5 @@ FROM scratch
 
 COPY --from=builder /workspace/target/wasm32-wasip1/release/webgpu-demo.wasm /webgpu-demo.wasm
 
-ENTRYPOINT ["/webgpu-demo.wasm"]
+ENTRYPOINT ["./webgpu-demo.wasm"]
 CMD ["dispatch", "16"]

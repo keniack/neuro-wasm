@@ -60,11 +60,11 @@ keniack/image-classification-demo:latest
 
 ## Execute
 
-Import the OCI images:
+Import the local OCI images built by `make build-examples-oci`:
 
 ```terminal
-sudo ctr images import target/wasm32-wasip1/debug/webgpu-demo-img.tar
-sudo ctr images import target/wasm32-wasip1/debug/image-classification-demo-img.tar
+sudo ctr images import --all-platforms target/wasm32-wasip1/debug/webgpu-demo-img.tar
+sudo ctr images import --all-platforms target/wasm32-wasip1/debug/image-classification-demo-img.tar
 ```
 
 Run `webgpu-demo`:
@@ -76,7 +76,7 @@ sudo ctr run --rm \
   --env WEBGPU_REQUIRED=1 \
   --env WEBGPU_BACKEND=vulkan \
   --env WEBGPU_DEVICE_PATH=/dev/dri/renderD128 \
-  ghcr.io/containerd/runwasi/webgpu-demo:local \
+  docker.io/keniack/webgpu-demo:local \
   webgpu-demo dispatch 16
 ```
 
@@ -89,8 +89,15 @@ sudo ctr run --rm \
   --env WEBGPU_REQUIRED=1 \
   --env WEBGPU_BACKEND=vulkan \
   --env WEBGPU_DEVICE_PATH=/dev/dri/renderD128 \
-  ghcr.io/containerd/runwasi/image-classification-demo:local \
+  docker.io/keniack/image-classification-demo:local \
   image-classification-demo
+```
+
+Or pull the pushed registry images and run those directly:
+
+```terminal
+sudo ctr images pull docker.io/keniack/webgpu-demo:latest
+sudo ctr images pull docker.io/keniack/image-classification-demo:latest
 ```
 
 The image classification OCI bundle defaults to:
@@ -101,5 +108,5 @@ The image classification OCI bundle defaults to:
 
 For more detail, see:
 
-- [examples/webgpu-demo/README.md](/Users/kenia/workspace/runwasi/examples/webgpu-demo/README.md:1)
-- [examples/image-classification-demo/README.md](/Users/kenia/workspace/runwasi/examples/image-classification-demo/README.md:1)
+- [examples/webgpu-demo/README.md](/Users/kenia/workspace/neuro-wasm/examples/webgpu-demo/README.md:1)
+- [examples/image-classification-demo/README.md](/Users/kenia/workspace/neuro-wasm/examples/image-classification-demo/README.md:1)

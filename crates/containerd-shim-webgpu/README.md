@@ -103,6 +103,16 @@ For Linux/Vulkan:
 
 The current containerd integration still has to be built and run on Linux because the upstream `containerd-shim-wasm` stack depends on Linux-only components such as `procfs`. The `wgpu` execution layer itself is generic and can target Metal or DX12 once the surrounding shim stack is portable.
 
+## Debugging
+
+If `ctr run` fails before guest execution starts, inspect the host containerd logs:
+
+```terminal
+sudo journalctl -u containerd -f
+```
+
+The vendored `runwasi` shim now logs workload classification details, including OCI wasm layer detection, resolved entrypoint candidates, and the exact reason behind `executor can't handle spec` failures.
+
 ## Examples
 
 - [webgpu-demo](/Users/kenia/workspace/neuro-wasm/examples/webgpu-demo/README.md:1)

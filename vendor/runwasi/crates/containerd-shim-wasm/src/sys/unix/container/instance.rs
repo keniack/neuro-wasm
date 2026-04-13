@@ -82,11 +82,19 @@ impl<S: Shim> SandboxInstance for Instance<S> {
                 log::warn!("Error obtaining wasm layers for container {id}.  Will attempt to use files inside container image. Error: {e}");
                 vec![]
             });
+        if modules.is_empty() {
+            log::warn!(
+                "No OCI wasm layers loaded for container {id}; the executor will attempt file entrypoint resolution inside the bundle/rootfs"
+            );
+        } else {
+            log::info!("Loaded {} OCI wasm layer(s) for container {id}", modules.len());
+        }
 
         let container = Container::build(
             |(id, cfg, modules)| {
                 let source_spec_path = cfg.bundle.join("config.json");
                 let spec = Spec::load(source_spec_path)?;
+                log::info!("building container {} from bundle {:?}", id, cfg.bundle);
                 let pod_id = pod_id(&spec);
 
                 match pod_id {
