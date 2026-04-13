@@ -1,5 +1,5 @@
 [package]
-name = "oci-tar-builder"
+name = "oci-tar-builder-legacy"
 description = "Library that can be used to build OCI tar archives"
 version = "0.4.0"
 edition = "2021"
@@ -23,5 +23,5 @@ indexmap = "2.2.5"
 path = "src/lib.rs"
 
 [[bin]]
-name = "oci-tar-builder"
+name = "oci-tar-builder-legacy"
 path = "src/bin.rs"

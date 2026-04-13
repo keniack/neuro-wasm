@@ -14,7 +14,7 @@ sha256 = { workspace = true, optional = true }
 log = { workspace = true, optional = true }
 env_logger = { workspace = true, optional = true }
 oci-spec = { version = "=0.6.7", optional = true }
-oci-tar-builder = { path = "../../vendor/oci-tar-builder-legacy", optional = true, package = "oci-tar-builder" }
+oci-tar-builder = { path = "../../vendor/oci-tar-builder-legacy", optional = true, package = "oci-tar-builder-legacy" }
 anyhow = { workspace = true, optional = true }
 
 [features]
