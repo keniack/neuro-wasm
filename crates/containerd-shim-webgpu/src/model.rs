@@ -169,14 +169,32 @@ fn resolve_guest_path(state: &WebGpuHostState, guest_path: &str) -> Result<PathB
 
     // Fall back to the host model directory configured via WEBGPU_MODEL_DIR.
     if let Some(model_dir) = state.config().model_dir.as_deref() {
-        let resolved = Path::new(model_dir).join(&relative);
+        let dir = Path::new(model_dir);
+        if !dir.is_dir() {
+            bail!(
+                "WEBGPU_MODEL_DIR={} is not a directory — set it to the directory that contains your ONNX models, not the model file itself",
+                model_dir
+            );
+        }
+        let resolved = dir.join(&relative);
         if resolved.exists() {
             return Ok(resolved);
         }
+        bail!(
+            "model path {} not found in WEBGPU_MODEL_DIR={} (looked at {})",
+            guest_path,
+            model_dir,
+            resolved.display()
+        );
+    }
+
+    // Last resort: resolve relative to the shim's working directory on the host.
+    if relative.exists() {
+        return Ok(relative);
     }
 
     bail!(
-        "model path {} does not exist in the container rootfs or WEBGPU_MODEL_DIR",
+        "model path {} not found — set WEBGPU_MODEL_DIR to the host directory containing your ONNX models",
         guest_path
     )
 }

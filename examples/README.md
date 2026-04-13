@@ -160,7 +160,7 @@ This example also does not use `dispatch 16`. Its guest argv is:
 ["/yolo-detection-demo.wasm", "<image-path>", "[model-path]"]
 ```
 
-Use the image defaults:
+The container image does not bundle a model. Set `WEBGPU_MODEL_DIR` to the directory on the host where your ONNX model lives. The guest defaults to `examples/yolo-detection-demo/models/model.onnx` as the model path.
 
 ```terminal
 sudo ctr run --rm \
@@ -169,44 +169,15 @@ sudo ctr run --rm \
   --env WEBGPU_REQUIRED=1 \
   --env WEBGPU_BACKEND=vulkan \
   --env WEBGPU_DEVICE_PATH=/dev/dri/renderD128 \
-  docker.io/keniack/yolo-detection-demo:local \
+  --env WEBGPU_MODEL_DIR=/host/models \
+  docker.io/keniack/yolo-detection-demo:latest \
   yolo-detection-demo
 ```
 
-The guest prefers `/models/yolov8l.onnx` when the image contains it. The repo image falls back to the bundled JSON detector so the smoke test stays small.
-
-Pass the Wasm path plus explicit asset paths for the bundled JSON detector:
-
-```terminal
-sudo ctr run --rm \
-  --runtime=io.containerd.webgpu.v1 \
-  --env WEBGPU_ENABLED=1 \
-  --env WEBGPU_REQUIRED=1 \
-  --env WEBGPU_BACKEND=vulkan \
-  --env WEBGPU_DEVICE_PATH=/dev/dri/renderD128 \
-  docker.io/keniack/yolo-detection-demo:local \
-  yolo-detection-demo \
-  /yolo-detection-demo.wasm /images/golden-retriever.ppm /models/yolo-detection-demo.json
-```
-
-Or use an ONNX model after adding it to the image:
-
-```terminal
-sudo ctr run --rm \
-  --runtime=io.containerd.webgpu.v1 \
-  --env WEBGPU_ENABLED=1 \
-  --env WEBGPU_REQUIRED=1 \
-  --env WEBGPU_BACKEND=vulkan \
-  --env WEBGPU_DEVICE_PATH=/dev/dri/renderD128 \
-  docker.io/keniack/yolo-detection-demo:local \
-  yolo-detection-demo \
-  /yolo-detection-demo.wasm /images/golden-retriever.ppm /models/yolov8l.onnx
-```
-
-This example accepts both a lightweight `.json` demo model and a host-run `.onnx` model. The image can bundle `/models/yolov8l.onnx`, and when it is present the guest defaults to that path. The repo still keeps the tiny JSON detector as a fallback so the shipped smoke-test image stays small. The host running the shim needs `python3`, `onnxruntime`, `numpy`, and `Pillow` installed for `.onnx`.
+The host running the shim needs `python3`, `onnxruntime`, `numpy`, and `Pillow` installed.
 
 For more detail, see:
 
-- [examples/webgpu-demo/README.md](/Users/kenia/workspace/neuro-wasm/examples/webgpu-demo/README.md:1)
-- [examples/image-classification-demo/README.md](/Users/kenia/workspace/neuro-wasm/examples/image-classification-demo/README.md:1)
-- [examples/yolo-detection-demo/README.md](/Users/kenia/workspace/neuro-wasm/examples/yolo-detection-demo/README.md:1)
+- [examples/webgpu-demo/README.md](webgpu-demo/README.md)
+- [examples/image-classification-demo/README.md](image-classification-demo/README.md)
+- [examples/yolo-detection-demo/README.md](yolo-detection-demo/README.md)

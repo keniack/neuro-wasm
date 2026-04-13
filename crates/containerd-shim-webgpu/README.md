@@ -158,6 +158,6 @@ The vendored `runwasi` shim now logs workload classification details, including 
 
 ## Examples
 
-- [webgpu-demo](/Users/kenia/workspace/neuro-wasm/examples/webgpu-demo/README.md:1)
-- [image-classification-demo](/Users/kenia/workspace/neuro-wasm/examples/image-classification-demo/README.md:1)
-- [yolo-detection-demo](/Users/kenia/workspace/neuro-wasm/examples/yolo-detection-demo/README.md:1)
+- [webgpu-demo](../../examples/webgpu-demo/README.md)
+- [image-classification-demo](../../examples/image-classification-demo/README.md)
+- [yolo-detection-demo](../../examples/yolo-detection-demo/README.md)

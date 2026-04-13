@@ -17,7 +17,7 @@ The response metadata is compact. The shim does not echo the full WGSL source ba
 
 The guest code uses the workspace `webgpu_guest` helper crate, so it does not need to declare the raw WebAssembly imports manually. The current example uses `ComputeDispatch`, `execute(...)`, and `bytes_from_f32_slice(...)`.
 
-This is still a lightweight demo model, not a full ResNet or YOLO graph runner. The important part is that the logits come from a real GPU dispatch through the generic `webgpu.execute` ABI, not from synthetic host-side scoring. For a separate shim-owned detection example with optional `.onnx` support, see [examples/yolo-detection-demo/README.md](/Users/kenia/workspace/neuro-wasm/examples/yolo-detection-demo/README.md:1).
+This is still a lightweight demo model, not a full ResNet or YOLO graph runner. The important part is that the logits come from a real GPU dispatch through the generic `webgpu.execute` ABI, not from synthetic host-side scoring. For a separate shim-owned ONNX detection example, see [examples/yolo-detection-demo/README.md](../yolo-detection-demo/README.md).
 
 ## Bundled Assets
 
