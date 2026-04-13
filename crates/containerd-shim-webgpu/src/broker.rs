@@ -20,6 +20,7 @@ mod imp {
     use crate::host::{self, WebGpuHostState};
     use crate::middleware::WebGpuMiddleware;
 
+    const BROKER_HOST_BASE: &str = "/run/containerd/webgpu-broker";
     const BROKER_MOUNT_DEST: &str = "/.containerd-shim-webgpu";
     const BROKER_SOCKET_NAME: &str = "broker.sock";
     const OP_DESCRIBE_RUNTIME: u8 = 1;
@@ -73,6 +74,7 @@ mod imp {
     }
 
     struct WebGpuBroker {
+        socket_dir: PathBuf,
         socket_path: PathBuf,
         shutdown: Arc<AtomicBool>,
         thread: Mutex<Option<JoinHandle<()>>>,
@@ -111,6 +113,7 @@ mod imp {
                 .context("spawning webgpu broker thread")?;
 
             Ok(Self {
+                socket_dir: socket.host_dir.clone(),
                 socket_path: socket.host_path.clone(),
                 shutdown,
                 thread: Mutex::new(Some(thread)),
@@ -127,6 +130,7 @@ mod imp {
                 }
             }
             let _ = fs::remove_file(&self.socket_path);
+            let _ = fs::remove_dir(&self.socket_dir);
         }
     }
 
@@ -229,16 +233,6 @@ mod imp {
         }
     }
 
-    fn broker_name(id: &str) -> String {
-        let ts = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_nanos();
-        let counter = BROKER_COUNTER.fetch_add(1, Ordering::Relaxed);
-        let id = sanitize(id).chars().take(16).collect::<String>();
-        format!("runwasi-webgpu-{id}-{ts:x}-{counter:x}")
-    }
-
     struct BrokerSocket {
         host_dir: PathBuf,
         host_path: PathBuf,
@@ -246,12 +240,12 @@ mod imp {
     }
 
     impl BrokerSocket {
-        fn new(bundle: &Path, id: &str) -> Result<Self> {
-            let host_dir = bundle.join(".containerd-shim-webgpu");
+        fn new(_bundle: &Path, id: &str) -> Result<Self> {
+            let host_dir = PathBuf::from(BROKER_HOST_BASE).join(broker_token(id));
             fs::create_dir_all(&host_dir).with_context(|| {
                 format!("creating broker socket directory at {}", host_dir.display())
             })?;
-            let socket_name = format!("{}-{BROKER_SOCKET_NAME}", broker_name(id));
+            let socket_name = BROKER_SOCKET_NAME.to_string();
             let host_path = host_dir.join(&socket_name);
             let container_path = PathBuf::from(BROKER_MOUNT_DEST).join(socket_name);
             Ok(Self {
@@ -260,6 +254,16 @@ mod imp {
                 container_path,
             })
         }
+    }
+
+    fn broker_token(id: &str) -> String {
+        let ts = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        let counter = BROKER_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let id = sanitize(id).chars().take(12).collect::<String>();
+        format!("{id}-{ts:x}-{counter:x}")
     }
 
     fn ensure_broker_mount(spec: &mut Spec, socket: &BrokerSocket) -> Result<()> {
