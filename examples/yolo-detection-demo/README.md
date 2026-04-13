@@ -40,13 +40,31 @@ available on the host and fall back to CPU when needed.
 - shared sample images from `examples/image-classification-demo/images`
 - `models/yolo-detection-demo.json`
 
-If you want to test a real ONNX model, place it under:
+If you want to test a real ONNX model, you have two options:
+
+**Bundle it in the image** — place it under:
 
 ```text
 examples/yolo-detection-demo/models/yolov8l.onnx
 ```
 
-before rebuilding the image, or build your own image that includes the model at a path such as `/models/yolov8l.onnx`.
+before rebuilding, or build your own image that includes the model at a path such as `/models/yolov8l.onnx`.
+
+**Keep it on the host** — set `WEBGPU_MODEL_DIR` to the directory on the host machine where models live. The shim will resolve the guest model path against that directory when the file is not found in the container rootfs. For example:
+
+```terminal
+sudo ctr run --rm \
+  --runtime=io.containerd.webgpu.v1 \
+  --env WEBGPU_ENABLED=1 \
+  --env WEBGPU_REQUIRED=1 \
+  --env WEBGPU_BACKEND=vulkan \
+  --env WEBGPU_DEVICE_PATH=/dev/dri/renderD128 \
+  --env WEBGPU_MODEL_DIR=/host/models \
+  docker.io/keniack/yolo-detection-demo:latest \
+  yolo-detection-demo
+```
+
+With `WEBGPU_MODEL_DIR=/host/models` the shim looks for the model at `/host/models/examples/yolo-detection-demo/models/model.onnx` (or whichever path the guest requested). `WEBGPU_MODEL_DIR` is host-only and is not forwarded into the guest environment.
 
 The demo guest prefers `/models/yolov8l.onnx` when the image contains it. If not, it falls back to the bundled JSON detector so the repo still ships a small runnable image.
 
@@ -141,7 +159,7 @@ sudo ctr run --rm \
   /yolo-detection-demo.wasm /images/golden-retriever.ppm /models/yolo-detection-demo.json
 ```
 
-To run a real `.onnx` model after adding it to the image:
+To run a real `.onnx` model bundled inside the image:
 
 ```terminal
 sudo ctr run --rm \
@@ -153,6 +171,21 @@ sudo ctr run --rm \
   docker.io/keniack/yolo-detection-demo:local \
   yolo-detection-demo \
   /yolo-detection-demo.wasm /images/golden-retriever.ppm /models/yolov8l.onnx
+```
+
+Or load the model from the host via `WEBGPU_MODEL_DIR` without rebuilding the image:
+
+```terminal
+sudo ctr run --rm \
+  --runtime=io.containerd.webgpu.v1 \
+  --env WEBGPU_ENABLED=1 \
+  --env WEBGPU_REQUIRED=1 \
+  --env WEBGPU_BACKEND=vulkan \
+  --env WEBGPU_DEVICE_PATH=/dev/dri/renderD128 \
+  --env WEBGPU_MODEL_DIR=/host/models \
+  docker.io/keniack/yolo-detection-demo:latest \
+  yolo-detection-demo \
+  /yolo-detection-demo.wasm /images/golden-retriever.ppm examples/yolo-detection-demo/models/model.onnx
 ```
 
 On success, the output should include:

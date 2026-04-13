@@ -140,21 +140,17 @@ fn parse_detect_metadata(metadata: &Value) -> Result<ModelDetectMetadata> {
 }
 
 fn resolve_guest_path(state: &WebGpuHostState, guest_path: &str) -> Result<PathBuf> {
-    let rootfs_dir = state
-        .rootfs_dir()
-        .ok_or_else(|| anyhow::anyhow!("model.detect is unavailable without a container rootfs"))?;
-    let guest_path = Path::new(guest_path);
+    let raw_path = Path::new(guest_path);
     let mut relative = PathBuf::new();
 
     // The guest may pass an absolute in-container path like `/models/yolov8l.onnx`.
-    // Resolve it against the bundle rootfs on the host and reject any path that
-    // tries to escape the container filesystem view.
-    for component in guest_path.components() {
+    // Strip the root and reject any path that tries to escape via `..`.
+    for component in raw_path.components() {
         match component {
             Component::RootDir | Component::CurDir => {}
             Component::Normal(segment) => relative.push(segment),
             Component::ParentDir | Component::Prefix(_) => {
-                bail!("model_path must stay inside the container rootfs")
+                bail!("model_path must not escape the model directory")
             }
         }
     }
@@ -163,15 +159,26 @@ fn resolve_guest_path(state: &WebGpuHostState, guest_path: &str) -> Result<PathB
         bail!("model_path must not be empty");
     }
 
-    let resolved = rootfs_dir.join(relative);
-    if !resolved.exists() {
-        bail!(
-            "model path {} does not exist in the container rootfs",
-            guest_path.display()
-        );
+    // Try the container rootfs first.
+    if let Some(rootfs_dir) = state.rootfs_dir() {
+        let resolved = rootfs_dir.join(&relative);
+        if resolved.exists() {
+            return Ok(resolved);
+        }
     }
 
-    Ok(resolved)
+    // Fall back to the host model directory configured via WEBGPU_MODEL_DIR.
+    if let Some(model_dir) = state.config().model_dir.as_deref() {
+        let resolved = Path::new(model_dir).join(&relative);
+        if resolved.exists() {
+            return Ok(resolved);
+        }
+    }
+
+    bail!(
+        "model path {} does not exist in the container rootfs or WEBGPU_MODEL_DIR",
+        guest_path
+    )
 }
 
 fn execute_json_detection(

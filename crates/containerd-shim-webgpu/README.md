@@ -61,16 +61,22 @@ The response JSON includes:
 
 The request metadata contains:
 
-- `model_path` - absolute in-container model path, for example `/models/yolov8l.onnx`
+- `model_path` - model path as seen from the guest, for example `examples/yolo-detection-demo/models/model.onnx` or `/models/yolov8l.onnx`
 - `task` - currently `object-detection`
 - `score_threshold`
 - `iou_threshold`
 - `max_detections`
 - `provider` - optional ONNX Runtime execution provider override
 
-The guest passes image bytes in `input_a`. The shim resolves `model_path` against the
-container rootfs on the host, loads the model there, executes detection in the broker,
-and returns JSON detections to the guest.
+The guest passes image bytes in `input_a`. The shim resolves `model_path` on the host
+and executes detection in the broker, returning JSON detections to the guest.
+
+Model path resolution order:
+
+1. `bundle/rootfs/<model_path>` — the file is bundled inside the container image.
+2. `WEBGPU_MODEL_DIR/<model_path>` — the file lives on the host at the directory configured by `WEBGPU_MODEL_DIR`.
+
+`WEBGPU_MODEL_DIR` is a host-only env var consumed by the shim and never forwarded into the guest environment.
 
 Model formats:
 
@@ -134,7 +140,7 @@ For Linux/Vulkan:
 2. Verify the host GPU with `vulkaninfo --summary`.
 3. Expose the render node into the runtime, for example `/dev/dri/renderD128`.
 
-The shim keeps the native GPU stack on the host side and brokers WebGPU requests from the guest over an internal Unix socket. `scratch` Wasm images do not need host Vulkan libraries inside the container, and host-only settings such as `WEBGPU_DEVICE_PATH` stay in the shim instead of being forwarded into the guest Wasm environment. If the shim still logs `libvulkan.so.1: cannot open shared object file` or `missing Vulkan entry points`, the Vulkan loader is missing on the host. Install `libvulkan1` and the vendor driver on the machine running `containerd`.
+The shim keeps the native GPU stack on the host side and brokers WebGPU requests from the guest over an internal Unix socket. `scratch` Wasm images do not need host Vulkan libraries inside the container, and host-only settings such as `WEBGPU_DEVICE_PATH` and `WEBGPU_MODEL_DIR` stay in the shim instead of being forwarded into the guest Wasm environment. If the shim still logs `libvulkan.so.1: cannot open shared object file` or `missing Vulkan entry points`, the Vulkan loader is missing on the host. Install `libvulkan1` and the vendor driver on the machine running `containerd`.
 
 The current containerd integration still has to be built and run on Linux because the upstream `containerd-shim-wasm` stack depends on Linux-only components such as `procfs`. The `wgpu` execution layer itself is generic and can target Metal or DX12 once the surrounding shim stack is portable.
 

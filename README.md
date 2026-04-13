@@ -13,7 +13,7 @@ The main runtime is [containerd-shim-webgpu](/Users/kenia/workspace/neuro-wasm/c
 - real tensor-style matrix-vector inference for image classification
 - shim-owned object detection over `.json` or `.onnx` models
 
-The same host import module also exposes a shim-owned `model.detect` flow through the existing `execute(...)` ABI. In that mode, the guest sends image bytes plus an in-container model path and the shim resolves and runs the model on the host side, keeping the guest isolated.
+The same host import module also exposes a shim-owned `model.detect` flow through the existing `execute(...)` ABI. In that mode, the guest sends image bytes plus a model path and the shim resolves and runs the model on the host side, keeping the guest isolated. The shim looks for the model inside the container rootfs first, then falls back to the host directory configured by `WEBGPU_MODEL_DIR`.
 
 ## Workspace Layout
 
@@ -215,6 +215,7 @@ Useful environment variables:
 - `WEBGPU_MAX_BUFFER_SIZE=<bytes>`
 - `WEBGPU_MAX_BIND_GROUPS=<count>`
 - `WEBGPU_FORCE_FALLBACK_ADAPTER=1|0`
+- `WEBGPU_MODEL_DIR=<host-path>` — host directory searched when a model is not found inside the container rootfs (host-only, not forwarded to the guest)
 
 ## Debugging
 
