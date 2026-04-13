@@ -24,6 +24,33 @@ The shim support crates are vendored from the upstream `containerd/runwasi` `con
 
 You need a native GPU backend installed on the host.
 
+Build prerequisites on Debian/Ubuntu:
+
+```terminal
+sudo make install-build-deps-debian
+```
+
+That target installs:
+
+- `build-essential`
+- `clang`
+- `libclang-dev`
+- `libc6-dev`
+- `libseccomp-dev`
+- `vulkan-tools`
+- `libvulkan1`
+
+Equivalent Fedora/RHEL packages:
+
+- `gcc`
+- `gcc-c++`
+- `clang`
+- `libclang-devel`
+- `glibc-devel`
+- `libseccomp-devel`
+- `vulkan-tools`
+- `vulkan-loader`
+
 For Linux with Vulkan:
 
 1. Install the Vulkan loader and vendor driver stack.
@@ -35,7 +62,7 @@ The shim uses `wgpu` natively, so it talks to the host GPU stack rather than emu
 
 The demo Wasm modules build on macOS, but the native containerd shim currently needs a Linux host because the upstream `containerd-shim-wasm` stack still depends on Linux-only components such as `procfs`.
 
-The Linux build also needs a working C toolchain for `bindgen`. `wasmedge-sys` generates bindings from `wasmedge.h`, so Clang and the system libc development headers must be installed.
+The Linux build also needs a working C toolchain for `bindgen`. `wasmedge-sys` generates bindings from `wasmedge.h`, so Clang and the system libc development headers must be installed. The shim stack also links against `libseccomp`, so the `libseccomp` development package is required during build.
 
 The default shim build uses the standalone dynamic WasmEdge library instead of static linking. That avoids extra linker dependencies during build, but the resulting binary needs `libwasmedge.so` available on the runtime library path unless you opt into the `static` feature yourself.
 
@@ -64,6 +91,7 @@ make build-examples-oci
 Install the shim binary into `PREFIX/bin`:
 
 ```terminal
+make build-webgpu
 sudo make install-webgpu
 ```
 

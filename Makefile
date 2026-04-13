@@ -3,6 +3,9 @@ INSTALL ?= install
 CARGO ?= cargo
 OPT_PROFILE ?= debug
 TARGET ?=
+APT_GET ?= apt-get
+
+DEBIAN_BUILD_DEPS = build-essential clang libclang-dev libc6-dev libseccomp-dev vulkan-tools libvulkan1
 
 ifeq ($(OPT_PROFILE),release)
 RELEASE_FLAG = --release
@@ -23,6 +26,11 @@ endif
 .PHONY: build
 build: build-webgpu build-examples
 
+.PHONY: install-build-deps-debian
+install-build-deps-debian:
+	sudo $(APT_GET) update
+	sudo $(APT_GET) install -y $(DEBIAN_BUILD_DEPS)
+
 .PHONY: build-webgpu
 build-webgpu:
 	$(CARGO) build $(TARGET_FLAG) $(RELEASE_FLAG) -p containerd-shim-webgpu
@@ -38,7 +46,8 @@ build-examples-oci:
 	$(CARGO) build --target wasm32-wasip1 $(RELEASE_FLAG) -p image-classification-demo --features oci-v1-tar
 
 .PHONY: install-webgpu
-install-webgpu: build-webgpu
+install-webgpu:
+	test -x $(BIN_DIR)/containerd-shim-webgpu-v1 || (echo "missing $(BIN_DIR)/containerd-shim-webgpu-v1; run 'make build-webgpu' first" && exit 1)
 	mkdir -p $(PREFIX)/bin
 	$(INSTALL) $(BIN_DIR)/containerd-shim-webgpu-v1 $(PREFIX)/bin/
 

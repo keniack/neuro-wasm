@@ -66,13 +66,30 @@ Or through the workspace helper:
 make build-webgpu
 ```
 
-On Linux, make sure Clang and the system libc development headers are installed before building. `wasmedge-sys` runs `bindgen` over `wasmedge.h`, and missing standard headers such as `stdbool.h` will stop the build.
+On Debian/Ubuntu you can install the common build prerequisites with:
+
+```terminal
+sudo make install-build-deps-debian
+```
+
+That covers:
+
+- `build-essential`
+- `clang`
+- `libclang-dev`
+- `libc6-dev`
+- `libseccomp-dev`
+- `vulkan-tools`
+- `libvulkan1`
+
+On Linux, make sure Clang, the system libc development headers, and the `libseccomp` development package are installed before building. `wasmedge-sys` runs `bindgen` over `wasmedge.h`, and missing standard headers such as `stdbool.h` will stop the build. The vendored `runwasi` shim stack also links against `libseccomp`.
 
 The default build uses the standalone dynamic WasmEdge library. If you explicitly need static WasmEdge linking, enable the `static` feature yourself; that typically also requires extra system linker dependencies such as `libzstd` and the C++ runtime.
 
 ## Install
 
 ```terminal
+make build-webgpu
 sudo make install-webgpu
 ```
 
