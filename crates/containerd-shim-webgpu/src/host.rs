@@ -132,7 +132,7 @@ fn describe_runtime(
         Some(addr) => crate::broker::describe_runtime(addr),
         None => describe_runtime_payload(state),
     }
-    .map_err(|err| host_error(err.to_string()))?;
+    .map_err(|err| host_error(format!("{err:#}")))?;
     write_guest_bytes(frame, out_ptr, out_cap, &encoded)
         .map_err(|err| host_error(err.to_string()))?;
 
@@ -167,7 +167,7 @@ fn execute(
         Some(addr) => crate::broker::execute(addr, &request_bytes, &input_a, &input_b),
         None => execute_payload(state, &request_bytes, &input_a, &input_b),
     }
-    .map_err(|err| host_error(err.to_string()))?;
+    .map_err(|err| host_error(format!("{err:#}")))?;
 
     write_guest_bytes(frame, out_ptr, out_cap, &encoded)
         .map_err(|err| host_error(err.to_string()))?;

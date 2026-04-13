@@ -2,9 +2,10 @@ pub(crate) const BROKER_ADDR_ENV: &str = "WEBGPU_BROKER_ADDR";
 
 #[cfg(target_os = "linux")]
 mod imp {
+    use std::fs;
     use std::io::{Read, Write};
-    use std::os::linux::net::SocketAddrExt;
-    use std::os::unix::net::{SocketAddr, UnixListener, UnixStream};
+    use std::os::unix::net::{UnixListener, UnixStream};
+    use std::path::{Path, PathBuf};
     use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
     use std::sync::{Arc, Mutex};
     use std::thread::{self, JoinHandle};
@@ -13,12 +14,14 @@ mod imp {
     use anyhow::{Context, Result, anyhow, bail};
     use containerd_shim_wasm::shim::InstanceGuard;
     use containerd_shimkit::sandbox::InstanceConfig;
-    use oci_spec::runtime::{Process, Spec};
+    use oci_spec::runtime::{MountBuilder, Process, Spec};
 
     use crate::broker::BROKER_ADDR_ENV;
     use crate::host::{self, WebGpuHostState};
     use crate::middleware::WebGpuMiddleware;
 
+    const BROKER_MOUNT_DEST: &str = "/.containerd-shim-webgpu";
+    const BROKER_SOCKET_NAME: &str = "broker.sock";
     const OP_DESCRIBE_RUNTIME: u8 = 1;
     const OP_EXECUTE: u8 = 2;
     const STATUS_OK: u8 = 0;
@@ -28,7 +31,7 @@ mod imp {
 
     pub async fn prepare_instance(
         id: &str,
-        _cfg: &InstanceConfig,
+        cfg: &InstanceConfig,
         spec: &mut Spec,
     ) -> Result<Option<Box<dyn InstanceGuard>>> {
         let envs = spec
@@ -39,11 +42,17 @@ mod imp {
             .unwrap_or_default();
         let middleware = WebGpuMiddleware::new(&envs)?;
         let state = WebGpuHostState::direct(middleware.config());
-        let broker = WebGpuBroker::start(id, state)?;
+        let socket = BrokerSocket::new(cfg.bundle.as_path(), id)?;
+        let broker = WebGpuBroker::start(id, &socket, state)?;
 
         let process = spec.process_mut().get_or_insert_with(Process::default);
         let process_envs = process.env_mut().get_or_insert_with(Vec::new);
-        ensure_env(process_envs, BROKER_ADDR_ENV, broker.name().to_string());
+        ensure_env(
+            process_envs,
+            BROKER_ADDR_ENV,
+            socket.container_path.display().to_string(),
+        );
+        ensure_broker_mount(spec, &socket)?;
 
         Ok(Some(Box::new(broker)))
     }
@@ -64,21 +73,35 @@ mod imp {
     }
 
     struct WebGpuBroker {
-        name: String,
+        socket_path: PathBuf,
         shutdown: Arc<AtomicBool>,
         thread: Mutex<Option<JoinHandle<()>>>,
     }
 
     impl WebGpuBroker {
-        fn start(id: &str, state: WebGpuHostState) -> Result<Self> {
-            let name = broker_name(id);
-            let addr = SocketAddr::from_abstract_name(name.as_bytes())
-                .context("building abstract Unix socket address for webgpu broker")?;
-            let listener =
-                UnixListener::bind_addr(&addr).context("binding webgpu broker socket")?;
+        fn start(id: &str, socket: &BrokerSocket, state: WebGpuHostState) -> Result<Self> {
+            if socket.host_path.exists() {
+                fs::remove_file(&socket.host_path).with_context(|| {
+                    format!(
+                        "removing stale webgpu broker socket at {}",
+                        socket.host_path.display()
+                    )
+                })?;
+            }
+            let listener = UnixListener::bind(&socket.host_path).with_context(|| {
+                format!(
+                    "binding webgpu broker socket at {}",
+                    socket.host_path.display()
+                )
+            })?;
             listener
                 .set_nonblocking(true)
                 .context("marking webgpu broker socket non-blocking")?;
+            log::info!(
+                "webgpu broker listening on host path {} for container path {}",
+                socket.host_path.display(),
+                socket.container_path.display()
+            );
 
             let shutdown = Arc::new(AtomicBool::new(false));
             let shutdown_thread = shutdown.clone();
@@ -88,14 +111,10 @@ mod imp {
                 .context("spawning webgpu broker thread")?;
 
             Ok(Self {
-                name,
+                socket_path: socket.host_path.clone(),
                 shutdown,
                 thread: Mutex::new(Some(thread)),
             })
-        }
-
-        fn name(&self) -> &str {
-            &self.name
         }
     }
 
@@ -107,6 +126,7 @@ mod imp {
                     let _ = thread.join();
                 }
             }
+            let _ = fs::remove_file(&self.socket_path);
         }
     }
 
@@ -149,9 +169,7 @@ mod imp {
     }
 
     fn connect(name: &str) -> Result<UnixStream> {
-        let addr = SocketAddr::from_abstract_name(name.as_bytes())
-            .context("building broker client socket address")?;
-        UnixStream::connect_addr(&addr).context("connecting to webgpu broker")
+        UnixStream::connect(name).with_context(|| format!("connecting to webgpu broker at {name}"))
     }
 
     fn write_response(stream: &mut UnixStream, status: u8, payload: &[u8]) -> Result<()> {
@@ -219,6 +237,50 @@ mod imp {
         let counter = BROKER_COUNTER.fetch_add(1, Ordering::Relaxed);
         let id = sanitize(id).chars().take(16).collect::<String>();
         format!("runwasi-webgpu-{id}-{ts:x}-{counter:x}")
+    }
+
+    struct BrokerSocket {
+        host_dir: PathBuf,
+        host_path: PathBuf,
+        container_path: PathBuf,
+    }
+
+    impl BrokerSocket {
+        fn new(bundle: &Path, id: &str) -> Result<Self> {
+            let host_dir = bundle.join(".containerd-shim-webgpu");
+            fs::create_dir_all(&host_dir).with_context(|| {
+                format!("creating broker socket directory at {}", host_dir.display())
+            })?;
+            let socket_name = format!("{}-{BROKER_SOCKET_NAME}", broker_name(id));
+            let host_path = host_dir.join(&socket_name);
+            let container_path = PathBuf::from(BROKER_MOUNT_DEST).join(socket_name);
+            Ok(Self {
+                host_dir,
+                host_path,
+                container_path,
+            })
+        }
+    }
+
+    fn ensure_broker_mount(spec: &mut Spec, socket: &BrokerSocket) -> Result<()> {
+        let mounts = spec.mounts_mut().get_or_insert_with(Vec::new);
+        let destination = PathBuf::from(BROKER_MOUNT_DEST);
+        if mounts
+            .iter()
+            .any(|mount| mount.destination() == &destination)
+        {
+            return Ok(());
+        }
+
+        let mount = MountBuilder::default()
+            .destination(destination)
+            .typ("bind")
+            .source(socket.host_dir.clone())
+            .options(vec!["rbind".to_string(), "rw".to_string()])
+            .build()
+            .context("building webgpu broker bind mount")?;
+        mounts.push(mount);
+        Ok(())
     }
 
     fn sanitize(value: &str) -> String {
