@@ -631,6 +631,7 @@ fn requested_backends(value: &str) -> Result<wgpu::Backends> {
 
 fn backend_name(backend: wgpu::Backend) -> &'static str {
     match backend {
+        wgpu::Backend::Empty => "empty",
         wgpu::Backend::Vulkan => "vulkan",
         wgpu::Backend::Metal => "metal",
         wgpu::Backend::Dx12 => "dx12",

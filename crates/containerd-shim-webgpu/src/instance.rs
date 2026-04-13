@@ -4,7 +4,6 @@ use std::env;
 use std::str::FromStr;
 
 use anyhow::{Context, Result};
-use cfg_if::cfg_if;
 use containerd_shim_wasm::sandbox::Sandbox;
 use containerd_shim_wasm::sandbox::context::{Entrypoint, RuntimeContext};
 use containerd_shim_wasm::shim::{Shim, Version, version};
@@ -14,6 +13,7 @@ use wasmedge_sdk::config::{CommonConfigOptions, Config, ConfigBuilder};
 use wasmedge_sdk::plugin::NNPreload;
 #[cfg(all(feature = "plugin", not(target_env = "musl")))]
 use wasmedge_sdk::plugin::PluginManager;
+use wasmedge_sdk::vm::SyncInst;
 use wasmedge_sdk::wasi::WasiModule;
 use wasmedge_sdk::{Module, Store, Vm};
 
@@ -80,30 +80,35 @@ impl Sandbox for WasmEdgeWebGpuSandbox {
             }
         }
 
-        let mut instances: HashMap<String, &mut dyn AsInstance> = HashMap::new();
-        cfg_if! {
-            if #[cfg(all(feature = "plugin", not(target_env = "musl")))] {
-                PluginManager::load(None)?;
-                match env::var("WASMEDGE_WASINN_PRELOAD") {
-                    Ok(value) => PluginManager::nn_preload(vec![NNPreload::from_str(value.as_str())?]),
-                    Err(_) => log::debug!("No specific nn_preload parameter for wasi_nn plugin"),
-                }
-
-                // Load the wasi_nn plugin manually as a workaround.
-                // It should call auto_detect_plugins after the issue is fixed.
-                let mut wasi_nn = PluginManager::names()
-                    .contains(&"wasi_nn".to_string())
-                    .then(PluginManager::load_plugin_wasi_nn)
-                    .transpose()?;
-                if let Some(ref mut nn) = wasi_nn {
-                    instances.insert(nn.name().unwrap().to_string(), nn);
-                }
+        #[cfg(all(feature = "plugin", not(target_env = "musl")))]
+        let mut wasi_nn = {
+            PluginManager::load(None)?;
+            match env::var("WASMEDGE_WASINN_PRELOAD") {
+                Ok(value) => PluginManager::nn_preload(vec![NNPreload::from_str(value.as_str())?]),
+                Err(_) => log::debug!("No specific nn_preload parameter for wasi_nn plugin"),
             }
+
+            // Load the wasi_nn plugin manually as a workaround.
+            // It should call auto_detect_plugins after the issue is fixed.
+            PluginManager::names()
+                .contains(&"wasi_nn".to_string())
+                .then(PluginManager::load_plugin_wasi_nn)
+                .transpose()?
+        };
+
+        let mut instances: HashMap<String, &mut dyn SyncInst> = HashMap::new();
+        #[cfg(all(feature = "plugin", not(target_env = "musl")))]
+        if let Some(ref mut nn) = wasi_nn {
+            let nn_name = nn.name().unwrap_or_else(|| "wasi_nn".to_string());
+            instances.insert(nn_name, nn);
         }
 
         let mut webgpu_host = host::build_import(middleware.config())
             .context("creating WebGPU host import module")?;
-        instances.insert(webgpu_host.name().to_string(), &mut webgpu_host);
+        let webgpu_name = webgpu_host
+            .name()
+            .unwrap_or_else(|| "webgpu".to_string());
+        instances.insert(webgpu_name, &mut webgpu_host);
 
         // Keep filesystem exposure intentionally simple for now. Tight isolation can be layered
         // back in once the real GPU path and ABI are stable.
@@ -116,15 +121,16 @@ impl Sandbox for WasmEdgeWebGpuSandbox {
 
         let wasm_bytes = source.as_bytes()?;
         let module = Module::from_bytes(Some(&self.config), &wasm_bytes)?;
-        let mut vm = Vm::new(Store::new(Some(&self.config), instances).unwrap());
         let mod_name = name.unwrap_or_else(|| "main".to_string());
+        {
+            let store = Store::new(Some(&self.config), instances).context("creating WasmEdge store")?;
+            let mut vm = Vm::new(store);
+            vm.register_module(Some(&mod_name), module)
+                .context("registering module")?;
 
-        let vm = vm
-            .register_module(Some(&mod_name), module)
-            .context("registering module")?;
-
-        log::debug!("running with method {func:?}");
-        vm.run_func(Some(&mod_name), func, vec![])?;
+            log::debug!("running with method {func:?}");
+            vm.run_func(Some(&mod_name), func, vec![])?;
+        }
 
         Ok(wasi_module.exit_code() as i32)
     }
