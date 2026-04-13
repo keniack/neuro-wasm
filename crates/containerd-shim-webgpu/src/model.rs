@@ -302,16 +302,16 @@ fn execute_onnx_detection(
 }
 
 fn helper_script_path() -> Result<&'static Path> {
-    let path = ONNX_HELPER_PATH.get_or_try_init(|| {
-        let dir = std::env::temp_dir().join("runwasi-webgpu");
-        fs::create_dir_all(&dir)
-            .with_context(|| format!("creating onnx helper directory at {}", dir.display()))?;
-        let path = dir.join(ONNX_HELPER_NAME);
-        fs::write(&path, ONNX_HELPER_SCRIPT)
-            .with_context(|| format!("writing onnx helper script to {}", path.display()))?;
-        Ok(path)
-    })?;
-    Ok(path.as_path())
+    if let Some(path) = ONNX_HELPER_PATH.get() {
+        return Ok(path.as_path());
+    }
+    let dir = std::env::temp_dir().join("runwasi-webgpu");
+    fs::create_dir_all(&dir)
+        .with_context(|| format!("creating onnx helper directory at {}", dir.display()))?;
+    let path = dir.join(ONNX_HELPER_NAME);
+    fs::write(&path, ONNX_HELPER_SCRIPT)
+        .with_context(|| format!("writing onnx helper script to {}", path.display()))?;
+    Ok(ONNX_HELPER_PATH.get_or_init(|| path).as_path())
 }
 
 fn extract_image_features(image_bytes: &[u8]) -> Result<(Vec<f32>, u32, u32)> {
