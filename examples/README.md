@@ -71,6 +71,8 @@ sudo ctr images import --all-platforms target/wasm32-wasip1/debug/image-classifi
 
 Run `webgpu-demo`:
 
+Do not append `dispatch 16` after the container name in this form. `ctr run` treats extra arguments as an entrypoint override; if you need an explicit override, use `/webgpu-demo.wasm dispatch 16`.
+
 ```terminal
 sudo ctr run --rm \
   --runtime=io.containerd.webgpu.v1 \
@@ -79,7 +81,7 @@ sudo ctr run --rm \
   --env WEBGPU_BACKEND=vulkan \
   --env WEBGPU_DEVICE_PATH=/dev/dri/renderD128 \
   docker.io/keniack/webgpu-demo:local \
-  webgpu-demo dispatch 16
+  webgpu-demo
 ```
 
 Run `image-classification-demo`:

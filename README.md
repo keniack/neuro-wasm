@@ -91,8 +91,6 @@ That exports standard OCI/rootfs container images to:
 - `target/wasm32-wasip1/debug/webgpu-demo-img.tar`
 - `target/wasm32-wasip1/debug/image-classification-demo-img.tar`
 
-The examples themselves no longer use Cargo `build.rs` packaging. The local OCI tar export is handled at the repo level through Docker so the images behave like ordinary containers with a `.wasm` entrypoint in rootfs.
-
 Build and push both example container images to the default `keniack` repository:
 
 ```terminal
@@ -122,6 +120,8 @@ Run workloads with the runtime name `io.containerd.webgpu.v1`.
 
 Example on Linux/Vulkan:
 
+Do not append `dispatch 16` after the container name in this form. `ctr run` treats extra arguments as an entrypoint override; if you need to override it explicitly, pass `/webgpu-demo.wasm dispatch 16`.
+
 ```terminal
 sudo ctr images pull docker.io/keniack/webgpu-demo:latest
 
@@ -132,7 +132,7 @@ sudo ctr run --rm \
   --env WEBGPU_BACKEND=vulkan \
   --env WEBGPU_DEVICE_PATH=/dev/dri/renderD128 \
   docker.io/keniack/webgpu-demo:latest \
-  webgpu-demo dispatch 16
+  webgpu-demo
 ```
 
 Useful environment variables:

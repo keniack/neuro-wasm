@@ -61,6 +61,8 @@ The Wasm module builds on macOS, but the native containerd shim currently has to
 
 Import the local OCI tar and start it with the WebGPU shim:
 
+Do not append `dispatch 16` after the container name here. With `ctr run`, any extra arguments override the image entrypoint, so the shim would try to execute `dispatch` as the program. If you need to override it explicitly, pass `/webgpu-demo.wasm dispatch 16`.
+
 ```terminal
 sudo ctr images import --all-platforms target/wasm32-wasip1/debug/webgpu-demo-img.tar
 
@@ -71,7 +73,7 @@ sudo ctr run --rm \
   --env WEBGPU_BACKEND=vulkan \
   --env WEBGPU_DEVICE_PATH=/dev/dri/renderD128 \
   docker.io/keniack/webgpu-demo:local \
-  webgpu-demo dispatch 16
+  webgpu-demo
 ```
 
 Or pull the pushed registry image and run it directly:
@@ -86,5 +88,5 @@ sudo ctr run --rm \
   --env WEBGPU_BACKEND=vulkan \
   --env WEBGPU_DEVICE_PATH=/dev/dri/renderD128 \
   docker.io/keniack/webgpu-demo:latest \
-  webgpu-demo dispatch 16
+  webgpu-demo
 ```

@@ -72,6 +72,13 @@
 //! - `OTEL_SDK_DISABLED`: Disable OpenTelemetry SDK
 //!
 
+use std::io::Write as _;
+
+use containerd_shim::protos::{
+    protobuf::{Message, MessageField},
+    types::introspection::{RuntimeInfo, RuntimeVersion},
+};
+
 use crate::shim::{Config, Instance, Shim};
 
 mod private {
@@ -91,6 +98,34 @@ pub trait Cli: Shim + private::Sealed {
 
 impl<S: Shim> Cli for S {
     fn run(config: impl Into<Option<Config>>) {
+        let info_mode = std::env::args_os()
+            .skip(1)
+            .any(|arg| arg == "-info" || arg == "--info");
+        if info_mode {
+            let version = S::version();
+            let info = RuntimeInfo {
+                name: S::name().to_string(),
+                version: MessageField::some(RuntimeVersion {
+                    version: version.version.to_string(),
+                    revision: version.revision.to_string(),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            };
+
+            match info.write_to_bytes() {
+                Ok(bytes) => {
+                    let mut stdout = std::io::stdout().lock();
+                    stdout
+                        .write_all(&bytes)
+                        .and_then(|_| stdout.flush())
+                        .expect("failed to write runtime info");
+                    return;
+                }
+                Err(err) => panic!("failed to encode runtime info: {err}"),
+            }
+        }
+
         let config = config.into().unwrap_or_default();
         let config = containerd_shimkit::Config {
             no_setup_logger: config.no_setup_logger,
