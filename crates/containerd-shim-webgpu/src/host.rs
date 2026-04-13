@@ -315,6 +315,7 @@ fn execute_dispatch(
         ResultEncoding::F32 => Some(bytes_to_f32(&output_bytes)?),
     };
     let checksum = checksum(&output_bytes);
+    let response_metadata = summarized_metadata(&request.metadata, &metadata);
 
     let response = DispatchResponse {
         kind: "compute.dispatch",
@@ -331,7 +332,7 @@ fn execute_dispatch(
         result_encoding: metadata.result_encoding.as_str(),
         output_words,
         output_f32,
-        metadata: request.metadata.clone(),
+        metadata: response_metadata,
     };
 
     serde_json::to_vec(&response).context("serializing dispatch response")
@@ -551,6 +552,23 @@ fn parse_dispatch_metadata(metadata: &Value) -> Result<DispatchMetadata> {
     }
 
     serde_json::from_value(metadata.clone()).context("parsing dispatch metadata")
+}
+
+fn summarized_metadata(request_metadata: &Value, parsed: &DispatchMetadata) -> Value {
+    let mut metadata = request_metadata.clone();
+    if let Some(object) = metadata.as_object_mut() {
+        if object.remove("shader_source").is_some() {
+            object.insert(
+                "shader_source_bytes".to_string(),
+                Value::from(parsed.shader_source.len()),
+            );
+        }
+        object.insert(
+            "params_u32_len".to_string(),
+            Value::from(parsed.params_u32.len()),
+        );
+    }
+    metadata
 }
 
 fn dispatch_entrypoint(request: &WebGpuExecutionRequest) -> &str {
