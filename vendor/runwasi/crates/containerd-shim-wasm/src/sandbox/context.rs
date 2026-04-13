@@ -24,8 +24,7 @@ pub trait RuntimeContext: Send + Sync {
     ///   - `name` - provided as the file name of the module in the entrypoint without the extension
     ///   - `func` - name of the exported function to call, obtained from the arguments on process OCI spec.
     ///   - `Source` - either a `File(PathBuf)` or `Oci(WasmLayer)`. When using a `File`
-    ///     source, the `PathBuf` is resolved against the container bundle/rootfs so image
-    ///     entrypoints can be read from the extracted filesystem on the host.
+    ///     source, the `PathBuf` is the container-visible path from the OCI spec.
     ///     If the image contains custom OCI Wasm layers, the source is provided as an array of `WasmLayer` structs.
     ///
     /// The first argument in the OCI spec for entrypoint is specified as `path#func` where `func` is optional
@@ -92,46 +91,6 @@ pub struct Entrypoint<'a> {
 pub(crate) struct WasiContext<'a> {
     pub spec: &'a Spec,
     pub wasm_layers: &'a [WasmLayer],
-    pub bundle: &'a Path,
-}
-
-impl WasiContext<'_> {
-    fn resolve_in_rootfs(&self, path: &Path) -> Option<PathBuf> {
-        if path.as_os_str().is_empty() {
-            return None;
-        }
-
-        let root = self.spec.root().as_ref()?.path();
-        let rootfs = if root.is_absolute() {
-            root.clone()
-        } else {
-            self.bundle.join(root)
-        };
-
-        let container_cwd = self
-            .spec
-            .process()
-            .as_ref()
-            .map(|process| process.cwd().clone())
-            .filter(|cwd| !cwd.as_os_str().is_empty())
-            .unwrap_or_else(|| PathBuf::from("/"));
-
-        let resolved = if path.is_absolute() {
-            rootfs.join(path.strip_prefix("/").ok()?)
-        } else {
-            let cwd = container_cwd
-                .strip_prefix("/")
-                .unwrap_or(container_cwd.as_path());
-            rootfs.join(cwd).join(path)
-        };
-
-        log::debug!(
-            "resolved wasm file entrypoint {} against bundle/rootfs to {}",
-            path.display(),
-            resolved.display()
-        );
-        Some(resolved)
-    }
 }
 
 impl RuntimeContext for WasiContext<'_> {
@@ -162,9 +121,7 @@ impl RuntimeContext for WasiContext<'_> {
             .unwrap_or((entry_point, "_start"));
 
         let source = if self.wasm_layers.is_empty() {
-            let raw_path = PathBuf::from(path);
-            let resolved = self.resolve_in_rootfs(&raw_path).unwrap_or_else(|| raw_path.clone());
-            Source::File(resolved)
+            Source::File(PathBuf::from(path))
         } else {
             Source::Oci(self.wasm_layers)
         };
@@ -226,7 +183,6 @@ mod tests {
         let ctx = WasiContext {
             spec: &spec,
             wasm_layers: &[],
-            bundle: Path::new("/bundle"),
         };
 
         let args = ctx.args();
@@ -246,7 +202,6 @@ mod tests {
         let ctx = WasiContext {
             spec: &spec,
             wasm_layers: &[],
-            bundle: Path::new("/bundle"),
         };
 
         let args = ctx.args();
@@ -274,7 +229,6 @@ mod tests {
         let ctx = WasiContext {
             spec: &spec,
             wasm_layers: &[],
-            bundle: Path::new("/bundle"),
         };
 
         let args = ctx.args();
@@ -296,7 +250,6 @@ mod tests {
         let ctx = WasiContext {
             spec: &spec,
             wasm_layers: &[],
-            bundle: Path::new("/bundle"),
         };
 
         let path = ctx.entrypoint().source;
@@ -327,10 +280,9 @@ mod tests {
         let ctx = WasiContext {
             spec: &spec,
             wasm_layers: &[],
-            bundle: Path::new("/bundle"),
         };
 
-        let expected_path = PathBuf::from("/bundle/rootfs/hello.wat");
+        let expected_path = PathBuf::from("hello.wat");
         let Entrypoint {
             name,
             func,
@@ -367,10 +319,9 @@ mod tests {
         let ctx = WasiContext {
             spec: &spec,
             wasm_layers: &[],
-            bundle: Path::new("/bundle"),
         };
 
-        let expected_path = PathBuf::from("/bundle/rootfs/root/hello.wat");
+        let expected_path = PathBuf::from("/root/hello.wat");
         let Entrypoint {
             name,
             func,
@@ -407,10 +358,9 @@ mod tests {
         let ctx = WasiContext {
             spec: &spec,
             wasm_layers: &[],
-            bundle: Path::new("/bundle"),
         };
 
-        let expected_path = PathBuf::from("/bundle/rootfs/root/hello.wat");
+        let expected_path = PathBuf::from("/root/hello.wat");
         assert!(matches!(
             ctx.entrypoint().source,
             Source::File(p) if p == expected_path
@@ -445,7 +395,6 @@ mod tests {
                     Digest::try_from(format!("sha256:{:064?}", 0))?,
                 ),
             }],
-            bundle: Path::new("/bundle"),
         };
 
         assert!(matches!(ctx.entrypoint().source, Source::Oci(_)));
@@ -468,7 +417,6 @@ mod tests {
         let ctx = WasiContext {
             spec: &spec,
             wasm_layers: &[],
-            bundle: Path::new("/bundle"),
         };
 
         let envs = ctx.envs();
@@ -489,7 +437,6 @@ mod tests {
         let ctx = WasiContext {
             spec: &spec,
             wasm_layers: &[],
-            bundle: Path::new("/bundle"),
         };
 
         let envs = ctx.envs();
@@ -508,7 +455,6 @@ mod tests {
         let ctx = WasiContext {
             spec: &spec,
             wasm_layers: &[],
-            bundle: Path::new("/bundle"),
         };
 
         let envs = ctx.envs();

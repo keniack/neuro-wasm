@@ -84,7 +84,7 @@ impl<S: Shim> SandboxInstance for Instance<S> {
             });
         if modules.is_empty() {
             log::warn!(
-                "No OCI wasm layers loaded for container {id}; the executor will attempt file entrypoint resolution inside the bundle/rootfs"
+                "No OCI wasm layers loaded for container {id}; the executor will attempt file entrypoint resolution inside the mounted container rootfs"
             );
         } else {
             log::info!("Loaded {} OCI wasm layer(s) for container {id}", modules.len());
@@ -105,7 +105,7 @@ impl<S: Shim> SandboxInstance for Instance<S> {
                 let rootdir = cfg.determine_rootdir(S::name())?;
 
                 let mut builder = ContainerBuilder::new(id, SyscallType::Linux)
-                    .with_executor(Executor::<S>::new(modules, cfg.bundle.clone()))
+                    .with_executor(Executor::<S>::new(modules))
                     .with_root_path(rootdir.clone())?;
 
                 if let Ok(f) = cfg.open_stdin() {
