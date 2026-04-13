@@ -101,9 +101,15 @@ struct DispatchResponse {
     metadata: Value,
 }
 
-pub fn build_import(config: &WebGpuConfig) -> Result<ImportObject<WebGpuHostState>> {
-    let mut builder = ImportObjectBuilder::new(WEBGPU_IMPORT_MODULE, WebGpuHostState::new(config))
-        .context("creating WebGPU import module")?;
+pub(crate) fn build_import(
+    config: &WebGpuConfig,
+    broker_addr: Option<&str>,
+) -> Result<ImportObject<WebGpuHostState>> {
+    let mut builder = ImportObjectBuilder::new(
+        WEBGPU_IMPORT_MODULE,
+        WebGpuHostState::new(config, broker_addr),
+    )
+    .context("creating WebGPU import module")?;
 
     builder
         .with_func::<(i32, i32), i32>(DESCRIBE_RUNTIME_FN, describe_runtime)
@@ -218,11 +224,12 @@ fn runtime_description(state: &WebGpuHostState) -> WebGpuRuntimeDescription {
 }
 
 impl WebGpuHostState {
-    fn new(config: &WebGpuConfig) -> Self {
+    fn new(config: &WebGpuConfig, broker_addr: Option<&str>) -> Self {
         Self {
             config: config.clone(),
-            broker_addr: env::var(crate::broker::BROKER_ADDR_ENV)
-                .ok()
+            broker_addr: broker_addr
+                .map(ToOwned::to_owned)
+                .or_else(|| env::var(crate::broker::BROKER_ADDR_ENV).ok())
                 .filter(|value| !value.is_empty()),
             runtime: Arc::new(OnceLock::new()),
         }

@@ -60,6 +60,7 @@ impl Shim for WasmEdgeWebGpuShim {
 impl Sandbox for WasmEdgeWebGpuSandbox {
     async fn run_wasi(&self, ctx: &impl RuntimeContext) -> Result<i32> {
         let args = ctx.args();
+        let broker_addr = env_value(ctx.envs(), crate::broker::BROKER_ADDR_ENV);
         let middleware =
             WebGpuMiddleware::new(ctx.envs()).context("configuring WebGPU middleware")?;
         let envs = middleware.guest_envs(ctx.envs());
@@ -115,7 +116,7 @@ impl Sandbox for WasmEdgeWebGpuSandbox {
             instances.insert(nn_name, nn);
         }
 
-        let mut webgpu_host = host::build_import(middleware.config())
+        let mut webgpu_host = host::build_import(middleware.config(), broker_addr)
             .context("creating WebGPU host import module")?;
         let webgpu_name = webgpu_host.name().unwrap_or_else(|| "webgpu".to_string());
         instances.insert(webgpu_name, &mut webgpu_host);
@@ -145,4 +146,9 @@ impl Sandbox for WasmEdgeWebGpuSandbox {
 
         Ok(wasi_module.exit_code() as i32)
     }
+}
+
+fn env_value<'a>(envs: &'a [String], key: &str) -> Option<&'a str> {
+    envs.iter()
+        .find_map(|env| env.strip_prefix(&format!("{key}=")))
 }
