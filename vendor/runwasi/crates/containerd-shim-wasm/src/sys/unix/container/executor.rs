@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
 use std::os::unix::prelude::PermissionsExt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::{Context, Result, bail};
@@ -38,6 +38,7 @@ impl<S: Shim> Clone for Executor<S> {
 pub(crate) struct InnerExecutor<S: Shim> {
     ty: OnceCell<ExecutorType<S>>,
     wasm_layers: Vec<WasmLayer>,
+    bundle: PathBuf,
 }
 
 impl<S: Shim> LibcontainerExecutor for Executor<S> {
@@ -99,16 +100,22 @@ impl<S: Shim> LibcontainerExecutor for Executor<S> {
 }
 
 impl<S: Shim> Executor<S> {
-    pub fn new(wasm_layers: Vec<WasmLayer>) -> Self {
+    pub fn new(wasm_layers: Vec<WasmLayer>, bundle: PathBuf) -> Self {
         Self(Arc::new(InnerExecutor {
             ty: Default::default(),
             wasm_layers,
+            bundle,
         }))
     }
 
     fn ctx<'a>(&'a self, spec: &'a Spec) -> WasiContext<'a> {
         let wasm_layers = &self.0.wasm_layers;
-        WasiContext { spec, wasm_layers }
+        let bundle: &Path = &self.0.bundle;
+        WasiContext {
+            spec,
+            wasm_layers,
+            bundle,
+        }
     }
 
     fn ty(&self, spec: &Spec) -> &ExecutorType<S> {

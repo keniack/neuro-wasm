@@ -111,6 +111,8 @@ If `ctr run` fails before guest execution starts, inspect the host containerd lo
 sudo journalctl -u containerd -f
 ```
 
+The shim binary defaults to `debug` log level, so startup validation failures should appear in the containerd journal without extra logger setup.
+
 The vendored `runwasi` shim now logs workload classification details, including OCI wasm layer detection, resolved entrypoint candidates, and the exact reason behind `executor can't handle spec` failures.
 
 ## Examples

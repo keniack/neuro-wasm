@@ -147,6 +147,8 @@ If `ctr run` fails during shim startup, inspect the containerd logs on the host:
 sudo journalctl -u containerd -f
 ```
 
+The `containerd-shim-webgpu` binary now defaults to `debug` log level so startup classification failures are emitted without extra logger configuration.
+
 Or, for recent shim errors only:
 
 ```terminal

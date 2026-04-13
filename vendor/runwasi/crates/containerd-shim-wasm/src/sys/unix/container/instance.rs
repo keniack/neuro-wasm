@@ -105,7 +105,7 @@ impl<S: Shim> SandboxInstance for Instance<S> {
                 let rootdir = cfg.determine_rootdir(S::name())?;
 
                 let mut builder = ContainerBuilder::new(id, SyscallType::Linux)
-                    .with_executor(Executor::<S>::new(modules))
+                    .with_executor(Executor::<S>::new(modules, cfg.bundle.clone()))
                     .with_root_path(rootdir.clone())?;
 
                 if let Ok(f) = cfg.open_stdin() {
