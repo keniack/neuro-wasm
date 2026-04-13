@@ -4,8 +4,13 @@ CARGO ?= cargo
 OPT_PROFILE ?= debug
 TARGET ?=
 APT_GET ?= apt-get
+DOCKER ?= docker
+IMAGE_REPO ?= keniack
+IMAGE_TAG ?= latest
 
 DEBIAN_BUILD_DEPS = build-essential clang libclang-dev libc6-dev libseccomp-dev vulkan-tools libvulkan1
+WEBGPU_DEMO_IMAGE = $(IMAGE_REPO)/webgpu-demo:$(IMAGE_TAG)
+IMAGE_CLASSIFICATION_DEMO_IMAGE = $(IMAGE_REPO)/image-classification-demo:$(IMAGE_TAG)
 
 ifeq ($(OPT_PROFILE),release)
 RELEASE_FLAG = --release
@@ -26,10 +31,32 @@ endif
 .PHONY: build
 build: build-webgpu build-examples
 
+.PHONY: docker-build-examples
+docker-build-examples: docker-build-webgpu-demo docker-build-image-classification-demo
+
+.PHONY: docker-push-examples
+docker-push-examples: docker-push-webgpu-demo docker-push-image-classification-demo
+
 .PHONY: install-build-deps-debian
 install-build-deps-debian:
 	sudo $(APT_GET) update
 	sudo $(APT_GET) install -y $(DEBIAN_BUILD_DEPS)
+
+.PHONY: docker-build-webgpu-demo
+docker-build-webgpu-demo:
+	$(DOCKER) build -f examples/webgpu-demo/Dockerfile -t $(WEBGPU_DEMO_IMAGE) .
+
+.PHONY: docker-build-image-classification-demo
+docker-build-image-classification-demo:
+	$(DOCKER) build -f examples/image-classification-demo/Dockerfile -t $(IMAGE_CLASSIFICATION_DEMO_IMAGE) .
+
+.PHONY: docker-push-webgpu-demo
+docker-push-webgpu-demo: docker-build-webgpu-demo
+	$(DOCKER) push $(WEBGPU_DEMO_IMAGE)
+
+.PHONY: docker-push-image-classification-demo
+docker-push-image-classification-demo: docker-build-image-classification-demo
+	$(DOCKER) push $(IMAGE_CLASSIFICATION_DEMO_IMAGE)
 
 .PHONY: build-webgpu
 build-webgpu:

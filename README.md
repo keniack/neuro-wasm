@@ -86,6 +86,18 @@ Build the demo OCI tar artifacts:
 make build-examples-oci
 ```
 
+Build and push both example container images to the default `keniack` repository:
+
+```terminal
+make docker-push-examples
+```
+
+Override the repository or tag when needed:
+
+```terminal
+make docker-push-examples IMAGE_REPO=keniack IMAGE_TAG=v0.1.0
+```
+
 ## Install
 
 Install the shim binary into `PREFIX/bin`:

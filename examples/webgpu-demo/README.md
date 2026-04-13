@@ -36,6 +36,26 @@ This also produces:
 target/wasm32-wasip1/debug/webgpu-demo-img.tar
 ```
 
+## Build And Push A Registry Image
+
+Build the example image:
+
+```terminal
+make docker-build-webgpu-demo
+```
+
+Push it to the default `keniack` repository:
+
+```terminal
+make docker-push-webgpu-demo
+```
+
+Override the repository or tag when needed:
+
+```terminal
+make docker-push-webgpu-demo IMAGE_REPO=keniack IMAGE_TAG=v0.1.0
+```
+
 ## Run Through The Shim
 
 This workload depends on the shim-provided `webgpu` host import module, so run it through the WebGPU shim rather than the plain `wasmedge` CLI.

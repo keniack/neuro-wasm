@@ -24,6 +24,24 @@ Build both OCI tar artifacts:
 make build-examples-oci
 ```
 
+Build both example container images:
+
+```terminal
+make docker-build-examples
+```
+
+Push both images to the default `keniack` repository:
+
+```terminal
+make docker-push-examples
+```
+
+Override the repository or tag when needed:
+
+```terminal
+make docker-push-examples IMAGE_REPO=keniack IMAGE_TAG=v0.1.0
+```
+
 This produces:
 
 ```terminal
@@ -31,6 +49,13 @@ target/wasm32-wasip1/debug/webgpu-demo.wasm
 target/wasm32-wasip1/debug/webgpu-demo-img.tar
 target/wasm32-wasip1/debug/image-classification-demo.wasm
 target/wasm32-wasip1/debug/image-classification-demo-img.tar
+```
+
+The Docker targets publish:
+
+```terminal
+keniack/webgpu-demo:latest
+keniack/image-classification-demo:latest
 ```
 
 ## Execute
