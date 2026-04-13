@@ -13,7 +13,7 @@ The main runtime is [containerd-shim-webgpu](crates/containerd-shim-webgpu/READM
 - real tensor-style matrix-vector inference for image classification
 - shim-owned ONNX object detection with models loaded from the host
 
-The same host import module also exposes a shim-owned `model.detect` flow through the existing `execute(...)` ABI. In that mode, the guest sends image bytes plus a model path and the shim resolves and runs the model on the host side, keeping the guest isolated. The shim looks for the model inside the container rootfs first, then falls back to the host directory configured by `WEBGPU_MODEL_DIR`.
+The same host import module also exposes a shim-owned `model.detect` flow through the existing `execute(...)` ABI. In that mode, the guest sends image bytes and the shim loads the configured host model on the host side, keeping the guest isolated. Legacy guests can still send a model path when `WEBGPU_MODEL_DIR` is configured, but the preferred flow is host-owned `WEBGPU_MODEL`.
 
 ## Workspace Layout
 
@@ -21,7 +21,7 @@ The same host import module also exposes a shim-owned `model.detect` flow throug
 - [crates/webgpu-guest](crates/webgpu-guest/README.md) - guest-side SDK for Wasm applications
 - [examples/webgpu-demo](examples/webgpu-demo/README.md) - generic WGSL dispatch smoke test
 - [examples/image-classification-demo](examples/image-classification-demo/README.md) - image classification over a real GPU tensor dispatch
-- [examples/yolo-detection-demo](examples/yolo-detection-demo/README.md) - shim-owned ONNX object detection loaded from the host via `WEBGPU_MODEL_DIR`
+- [examples/yolo-detection-demo](examples/yolo-detection-demo/README.md) - shim-owned ONNX object detection loaded from the host via `WEBGPU_MODEL`
 
 The shim support crates are vendored from the upstream `containerd/runwasi` `containerd-shim-wasm/v1.0.0` release so the dependency graph can be pinned locally instead of drifting with upstream git and crates.io resolution.
 
@@ -149,7 +149,7 @@ For shim-owned ONNX detection:
 ```rust
 use webgpu_guest::{ModelDetect, detect};
 
-let request = ModelDetect::new("examples/yolo-detection-demo/models/model.onnx")
+let request = ModelDetect::new()
     .score_threshold(0.25)
     .iou_threshold(0.45)
     .max_detections(20);
@@ -158,8 +158,8 @@ let response = detect(&request, &image_bytes)?;
 ```
 
 The shim-owned host runner needs `python3`, `onnxruntime`, `numpy`, and `Pillow` installed
-on the machine running `containerd-shim-webgpu-v1`. Set `WEBGPU_MODEL_DIR` on the host so
-the shim can resolve the model path without bundling it in the container image.
+on the machine running `containerd-shim-webgpu-v1`. Set `WEBGPU_MODEL` on the host to the
+full model file path so the shim can load it outside the container image.
 
 Build the guest module with:
 
@@ -214,7 +214,7 @@ Useful environment variables:
 - `WEBGPU_MAX_BUFFER_SIZE=<bytes>`
 - `WEBGPU_MAX_BIND_GROUPS=<count>`
 - `WEBGPU_FORCE_FALLBACK_ADAPTER=1|0`
-- `WEBGPU_MODEL_DIR=<host-path>` — host directory searched when a model is not found inside the container rootfs (host-only, not forwarded to the guest)
+- `WEBGPU_MODEL=<host-model-path>` — full host path to the ONNX/JSON model loaded by the shim (host-only, not forwarded to the guest)
 
 ## Debugging
 

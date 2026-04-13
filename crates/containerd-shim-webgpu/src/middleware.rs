@@ -5,6 +5,7 @@ use anyhow::{Result, bail};
 const HOST_ONLY_GUEST_ENV_KEYS: &[&str] = &[
     "WEBGPU_DEVICE_PATH",
     "WGPU_DEVICE_PATH",
+    "WEBGPU_MODEL",
     "WEBGPU_MODEL_DIR",
     crate::broker::BROKER_ADDR_ENV,
 ];
@@ -29,6 +30,7 @@ pub struct WebGpuConfig {
     pub max_bind_groups: u32,
     pub force_fallback_adapter: bool,
     pub required: bool,
+    pub model_path: Option<String>,
     pub model_dir: Option<String>,
 }
 
@@ -63,6 +65,9 @@ impl WebGpuConfig {
             force_fallback_adapter: env_bool(envs, "WEBGPU_FORCE_FALLBACK_ADAPTER")
                 .unwrap_or(false),
             required: env_bool(envs, "WEBGPU_REQUIRED").unwrap_or(false),
+            model_path: env_value(envs, "WEBGPU_MODEL")
+                .map(ToOwned::to_owned)
+                .filter(|value| !value.is_empty()),
             model_dir: env_value(envs, "WEBGPU_MODEL_DIR")
                 .map(ToOwned::to_owned)
                 .filter(|value| !value.is_empty()),
@@ -263,6 +268,7 @@ mod tests {
         let envs = vec![
             "WEBGPU_DEVICE_PATH=/dev/dri/renderD128".to_string(),
             "WGPU_DEVICE_PATH=/dev/dri/renderD128".to_string(),
+            "WEBGPU_MODEL=/host/models/model.onnx".to_string(),
             "WEBGPU_MODEL_DIR=/host/models".to_string(),
             format!("{}=broker-name", crate::broker::BROKER_ADDR_ENV),
         ];
@@ -280,6 +286,7 @@ mod tests {
                 .iter()
                 .all(|env| !env.starts_with("WGPU_DEVICE_PATH="))
         );
+        assert!(merged.iter().all(|env| !env.starts_with("WEBGPU_MODEL=")));
         assert!(
             merged
                 .iter()
@@ -291,6 +298,17 @@ mod tests {
                 .all(|env| !env.starts_with(&format!("{}=", crate::broker::BROKER_ADDR_ENV)))
         );
 
+        Ok(())
+    }
+
+    #[test]
+    fn model_path_parsed_from_envs() -> Result<()> {
+        let envs = vec!["WEBGPU_MODEL=/host/models/model.onnx".to_string()];
+        let middleware = WebGpuMiddleware::new(&envs)?;
+        assert_eq!(
+            middleware.config().model_path.as_deref(),
+            Some("/host/models/model.onnx")
+        );
         Ok(())
     }
 

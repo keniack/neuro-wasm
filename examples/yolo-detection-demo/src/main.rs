@@ -4,18 +4,15 @@ use std::process;
 
 use webgpu_guest::{DetectionResponse, ModelDetect, RuntimeDescription, describe_runtime, detect};
 
-const DEFAULT_MODEL_PATH: &str = "examples/yolo-detection-demo/models/model.onnx";
-
 fn main() {
     let mut args = env::args().skip(1);
     let image_path = match args.next() {
         Some(path) => path,
         None => {
-            eprintln!("usage: yolo-detection-demo <image-path> [model-path]");
+            eprintln!("usage: yolo-detection-demo <image-path>");
             process::exit(1);
         }
     };
-    let model_path = args.next().unwrap_or_else(|| DEFAULT_MODEL_PATH.to_string());
 
     let image_bytes = fs::read(&image_path).unwrap_or_else(|err| {
         eprintln!("failed to read image at {image_path}: {err}");
@@ -26,10 +23,9 @@ fn main() {
         process::exit(3);
     });
 
-    // The guest provides the image bytes and a model path.
-    // The shim resolves the path on the host (container rootfs or WEBGPU_MODEL_DIR),
-    // runs ONNX detection there, and returns structured results to the guest.
-    let request = ModelDetect::new(model_path.clone())
+    // The guest only provides image bytes. The shim owns model selection and loads the
+    // configured host model outside the guest/container.
+    let request = ModelDetect::new()
         .task("object-detection")
         .score_threshold(0.25)
         .iou_threshold(0.45)
@@ -41,7 +37,6 @@ fn main() {
     });
 
     println!("input.image={image_path}");
-    println!("input.model={model_path}");
     print_runtime(&runtime);
     print_detection_response(&response);
 }

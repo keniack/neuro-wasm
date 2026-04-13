@@ -74,7 +74,7 @@ For shim-owned object detection:
 ```rust
 use webgpu_guest::{ModelDetect, detect};
 
-let request = ModelDetect::new("examples/yolo-detection-demo/models/model.onnx")
+let request = ModelDetect::new()
     .score_threshold(0.25)
     .iou_threshold(0.45)
     .max_detections(20);

@@ -43,7 +43,8 @@ static ONNX_HELPER_PATH: OnceLock<PathBuf> = OnceLock::new();
 
 #[derive(Debug, Deserialize)]
 struct ModelDetectMetadata {
-    model_path: String,
+    #[serde(default)]
+    model_path: Option<String>,
     #[serde(default = "default_task")]
     task: String,
     #[serde(default = "default_score_threshold")]
@@ -120,15 +121,15 @@ pub(crate) fn execute_model_detect(
     image_bytes: &[u8],
 ) -> Result<Vec<u8>> {
     let metadata = parse_detect_metadata(&_request.metadata)?;
-    let model_host_path = resolve_guest_path(state, &metadata.model_path)?;
+    let resolved_model = resolve_model_path(state, metadata.model_path.as_deref())?;
 
-    let response = match model_extension(&model_host_path) {
+    let response = match model_extension(&resolved_model.host_path) {
         "json" => {
             host::validate_runtime_access(state.config())
                 .map_err(|err| anyhow::anyhow!("runtime access denied: {err:?}"))?;
-            execute_json_detection(state, &metadata, &model_host_path, image_bytes)?
+            execute_json_detection(state, &metadata, &resolved_model, image_bytes)?
         }
-        "onnx" => execute_onnx_detection(&metadata, &model_host_path, image_bytes)?,
+        "onnx" => execute_onnx_detection(&metadata, &resolved_model, image_bytes)?,
         other => bail!("unsupported model format for model.detect: {other}"),
     };
 
@@ -139,7 +140,35 @@ fn parse_detect_metadata(metadata: &Value) -> Result<ModelDetectMetadata> {
     serde_json::from_value(metadata.clone()).context("parsing model.detect metadata")
 }
 
-fn resolve_guest_path(state: &WebGpuHostState, guest_path: &str) -> Result<PathBuf> {
+struct ResolvedModel {
+    host_path: PathBuf,
+    response_model_path: String,
+}
+
+fn resolve_model_path(state: &WebGpuHostState, guest_path: Option<&str>) -> Result<ResolvedModel> {
+    if let Some(model_path) = state.config().model_path.as_deref() {
+        let path = Path::new(model_path);
+        if !path.is_file() {
+            bail!(
+                "WEBGPU_MODEL={} is not a file — set it to the full host path of your ONNX or JSON model",
+                model_path
+            );
+        }
+        return Ok(ResolvedModel {
+            host_path: path.to_path_buf(),
+            response_model_path: model_path.to_string(),
+        });
+    }
+
+    let guest_path = match guest_path.filter(|value| !value.trim().is_empty()) {
+        Some(path) => path,
+        None => {
+            bail!(
+                "model not configured — set WEBGPU_MODEL to the full host path of your ONNX or JSON model"
+            )
+        }
+    };
+
     let raw_path = Path::new(guest_path);
     let mut relative = PathBuf::new();
 
@@ -163,7 +192,10 @@ fn resolve_guest_path(state: &WebGpuHostState, guest_path: &str) -> Result<PathB
     if let Some(rootfs_dir) = state.rootfs_dir() {
         let resolved = rootfs_dir.join(&relative);
         if resolved.exists() {
-            return Ok(resolved);
+            return Ok(ResolvedModel {
+                host_path: resolved,
+                response_model_path: guest_path.to_string(),
+            });
         }
     }
 
@@ -178,7 +210,10 @@ fn resolve_guest_path(state: &WebGpuHostState, guest_path: &str) -> Result<PathB
         }
         let resolved = dir.join(&relative);
         if resolved.exists() {
-            return Ok(resolved);
+            return Ok(ResolvedModel {
+                host_path: resolved,
+                response_model_path: guest_path.to_string(),
+            });
         }
         bail!(
             "model path {} not found in WEBGPU_MODEL_DIR={} (looked at {})",
@@ -190,11 +225,14 @@ fn resolve_guest_path(state: &WebGpuHostState, guest_path: &str) -> Result<PathB
 
     // Last resort: resolve relative to the shim's working directory on the host.
     if relative.exists() {
-        return Ok(relative);
+        return Ok(ResolvedModel {
+            host_path: relative,
+            response_model_path: guest_path.to_string(),
+        });
     }
 
     bail!(
-        "model path {} not found — set WEBGPU_MODEL_DIR to the host directory containing your ONNX models",
+        "model path {} not found — set WEBGPU_MODEL to the full host path of your model",
         guest_path
     )
 }
@@ -202,14 +240,18 @@ fn resolve_guest_path(state: &WebGpuHostState, guest_path: &str) -> Result<PathB
 fn execute_json_detection(
     state: &WebGpuHostState,
     request: &ModelDetectMetadata,
-    model_path: &Path,
+    resolved_model: &ResolvedModel,
     image_bytes: &[u8],
 ) -> Result<ModelDetectResponse> {
-    let model_bytes = fs::read(model_path)
-        .with_context(|| format!("reading json detection model at {}", model_path.display()))?;
+    let model_bytes = fs::read(&resolved_model.host_path).with_context(|| {
+        format!(
+            "reading json detection model at {}",
+            resolved_model.host_path.display()
+        )
+    })?;
     let model: DemoJsonModel =
         serde_json::from_slice(&model_bytes).context("parsing json detection model")?;
-    validate_json_model(&model, model_path)?;
+    validate_json_model(&model, &resolved_model.host_path)?;
 
     let runtime = host::ensure_runtime(state)?;
     let (features, image_width, image_height) = extract_image_features(image_bytes)?;
@@ -246,7 +288,7 @@ fn execute_json_detection(
     Ok(ModelDetectResponse {
         kind: "model.detect",
         task: model.task.clone(),
-        model_path: request.model_path.clone(),
+        model_path: resolved_model.response_model_path.clone(),
         model_format: "json",
         runner: "webgpu.json-model",
         image_bytes: image_bytes.len(),
@@ -266,18 +308,18 @@ fn execute_json_detection(
 
 fn execute_onnx_detection(
     request: &ModelDetectMetadata,
-    model_path: &Path,
+    model: &ResolvedModel,
     image_bytes: &[u8],
 ) -> Result<ModelDetectResponse> {
     let helper_path = helper_script_path()?;
     let temp_image = TempImage::write(image_bytes)?;
     let mut command = Command::new("python3");
     // Keep the heavier ONNX runtime out of the guest process. The guest only supplies
-    // bytes and a model path; the shim owns model loading, preprocessing, and inference.
+    // image bytes; the shim owns model loading, preprocessing, and inference.
     command
         .arg(helper_path)
         .arg("--model")
-        .arg(model_path)
+        .arg(&model.host_path)
         .arg("--image")
         .arg(&temp_image.path)
         .arg("--score-threshold")
@@ -316,7 +358,7 @@ fn execute_onnx_detection(
     Ok(ModelDetectResponse {
         kind: "model.detect",
         task: request.task.clone(),
-        model_path: request.model_path.clone(),
+        model_path: model.response_model_path.clone(),
         model_format: "onnx",
         runner: "onnxruntime.host",
         image_bytes: image_bytes.len(),
@@ -625,5 +667,110 @@ fn detect_image_extension(bytes: &[u8]) -> &'static str {
         ".ppm"
     } else {
         ".img"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct TestPath {
+        path: PathBuf,
+    }
+
+    impl TestPath {
+        fn dir() -> Result<Self> {
+            let path = std::env::temp_dir().join(format!(
+                "runwasi-webgpu-model-test-{:x}",
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_nanos()
+            ));
+            fs::create_dir_all(&path)
+                .with_context(|| format!("creating test directory {}", path.display()))?;
+            Ok(Self { path })
+        }
+
+        fn join(&self, name: &str) -> PathBuf {
+            self.path.join(name)
+        }
+    }
+
+    impl Drop for TestPath {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.path);
+        }
+    }
+
+    fn config_with_models(
+        model_path: Option<String>,
+        model_dir: Option<String>,
+    ) -> crate::middleware::WebGpuConfig {
+        crate::middleware::WebGpuConfig {
+            enabled: true,
+            backend: "auto".to_string(),
+            adapter_name: "default".to_string(),
+            device_path: None,
+            max_buffer_size: 128 * 1024 * 1024,
+            max_bind_groups: 4,
+            force_fallback_adapter: false,
+            required: false,
+            model_path,
+            model_dir,
+        }
+    }
+
+    #[test]
+    fn resolve_model_path_prefers_configured_host_model() -> Result<()> {
+        let dir = TestPath::dir()?;
+        let configured_model = dir.join("configured.onnx");
+        fs::write(&configured_model, b"not-a-real-onnx")?;
+
+        let state = WebGpuHostState::direct(
+            &config_with_models(
+                Some(configured_model.display().to_string()),
+                Some(dir.path.display().to_string()),
+            ),
+            None,
+        );
+
+        let resolved = resolve_model_path(&state, Some("legacy-model.onnx"))?;
+        assert_eq!(resolved.host_path, configured_model);
+        assert_eq!(
+            resolved.response_model_path,
+            configured_model.display().to_string()
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn resolve_model_path_supports_legacy_model_dir() -> Result<()> {
+        let dir = TestPath::dir()?;
+        let legacy_model = dir.join("legacy.onnx");
+        fs::write(&legacy_model, b"legacy")?;
+
+        let state = WebGpuHostState::direct(
+            &config_with_models(None, Some(dir.path.display().to_string())),
+            None,
+        );
+
+        let resolved = resolve_model_path(&state, Some("legacy.onnx"))?;
+        assert_eq!(resolved.host_path, legacy_model);
+        assert_eq!(resolved.response_model_path, "legacy.onnx");
+
+        Ok(())
+    }
+
+    #[test]
+    fn resolve_model_path_requires_host_configuration_for_new_guest_api() {
+        let state = WebGpuHostState::direct(&config_with_models(None, None), None);
+
+        let err = resolve_model_path(&state, None).unwrap_err();
+        assert!(
+            err.to_string().contains("set WEBGPU_MODEL"),
+            "unexpected error: {err:#}"
+        );
     }
 }

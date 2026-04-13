@@ -2,7 +2,7 @@
 
 - `webgpu-demo` - sends a real WGSL vector-add kernel through the generic `webgpu.execute` dispatch API and prints the GPU-computed output tensor.
 - `image-classification-demo` - queries `webgpu.describe_runtime`, then loads a lightweight model and an input image and runs a real GPU matrix-vector inference pass through the same generic dispatch API.
-- `yolo-detection-demo` - sends image bytes plus a model path to the shim, which resolves and runs either a lightweight `.json` detector or a real `.onnx` detector on the host side and returns structured boxes.
+- `yolo-detection-demo` - sends image bytes to the shim, which loads either a lightweight `.json` detector or a real `.onnx` detector on the host side and returns structured boxes.
 
 All examples run as ordinary `scratch` OCI images. The guest only sees the `webgpu` ABI; the shim owns the native GPU stack and brokers requests on the host side.
 
@@ -157,10 +157,10 @@ Run `yolo-detection-demo`:
 This example also does not use `dispatch 16`. Its guest argv is:
 
 ```text
-["/yolo-detection-demo.wasm", "<image-path>", "[model-path]"]
+["/yolo-detection-demo.wasm", "<image-path>"]
 ```
 
-The container image does not bundle a model. Set `WEBGPU_MODEL_DIR` to the directory on the host where your ONNX model lives. The guest defaults to `examples/yolo-detection-demo/models/model.onnx` as the model path.
+The container image does not bundle a model. Set `WEBGPU_MODEL` to the full path of the ONNX model on the host. The shim loads that file directly and the guest no longer passes a model path.
 
 ```terminal
 sudo ctr run --rm \
@@ -169,7 +169,7 @@ sudo ctr run --rm \
   --env WEBGPU_REQUIRED=1 \
   --env WEBGPU_BACKEND=vulkan \
   --env WEBGPU_DEVICE_PATH=/dev/dri/renderD128 \
-  --env WEBGPU_MODEL_DIR=/host/models \
+  --env WEBGPU_MODEL=/host/models/model.onnx \
   docker.io/keniack/yolo-detection-demo:latest \
   yolo-detection-demo
 ```

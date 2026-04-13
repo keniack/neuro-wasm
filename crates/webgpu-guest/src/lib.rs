@@ -155,9 +155,8 @@ pub struct ModelDetect {
 }
 
 impl ModelDetect {
-    pub fn new(model_path: impl Into<String>) -> Self {
+    pub fn new() -> Self {
         let mut metadata = Map::new();
-        metadata.insert("model_path".to_string(), Value::String(model_path.into()));
         metadata.insert(
             "task".to_string(),
             Value::String("object-detection".to_string()),

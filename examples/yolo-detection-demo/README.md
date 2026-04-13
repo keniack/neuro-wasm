@@ -5,12 +5,11 @@
 The workload:
 
 - takes the image path as the first CLI argument
-- optionally takes the ONNX model path as the second CLI argument (default: `examples/yolo-detection-demo/models/model.onnx`)
 - calls `webgpu.describe_runtime` to query the effective shim-side runtime
 - reads the image bytes inside the guest
 - calls the workspace `webgpu_guest::detect(...)` helper
-- sends the image bytes plus the model path to the shim
-- lets the shim resolve the model on the host (container rootfs or `WEBGPU_MODEL_DIR`) and run detection
+- sends the image bytes to the shim
+- lets the shim load the configured host model and run detection outside the container
 - receives structured detections back from the shim
 
 This is a separate demo from `image-classification-demo` because the shim owns the full model execution path here rather than exposing only a generic compute kernel.
@@ -26,17 +25,17 @@ The demo uses ONNX models executed through a host-side ONNX Runtime helper. The 
 
 The shim chooses the best available ONNX Runtime execution provider automatically and falls back to CPU. You can pin a specific provider through `ModelDetect::provider(...)` in the guest SDK.
 
-## Model Path Resolution
+## Model Selection
 
-The container image does not bundle a model. Set `WEBGPU_MODEL_DIR` to the directory on the host where your ONNX model lives. The shim resolves the guest model path against that directory.
+The container image does not bundle a model. Set `WEBGPU_MODEL` to the full path of the ONNX model on the host. The shim loads that file directly and the guest never sees the host path as an input.
 
-With the default guest model path (`examples/yolo-detection-demo/models/model.onnx`) and `WEBGPU_MODEL_DIR=/host/models`, the shim looks for:
+For example:
 
 ```text
-/host/models/examples/yolo-detection-demo/models/model.onnx
+/host/models/model.onnx
 ```
 
-`WEBGPU_MODEL_DIR` is host-only and is never forwarded into the guest environment.
+`WEBGPU_MODEL` is host-only and is never forwarded into the guest environment.
 
 ## Bundled Assets
 
@@ -99,10 +98,10 @@ make docker-push-yolo-detection-demo IMAGE_REPO=keniack IMAGE_TAG=v0.1.0
 This example does not use `dispatch 16`. The guest argv shape is:
 
 ```text
-["/yolo-detection-demo.wasm", "<image-path>", "[model-path]"]
+["/yolo-detection-demo.wasm", "<image-path>"]
 ```
 
-Run with `WEBGPU_MODEL_DIR` pointing to the directory on the host that contains your ONNX model:
+Run with `WEBGPU_MODEL` pointing to the model file on the host:
 
 ```terminal
 sudo ctr images pull docker.io/keniack/yolo-detection-demo:latest
@@ -113,14 +112,12 @@ sudo ctr run --rm \
   --env WEBGPU_REQUIRED=1 \
   --env WEBGPU_BACKEND=vulkan \
   --env WEBGPU_DEVICE_PATH=/dev/dri/renderD128 \
-  --env WEBGPU_MODEL_DIR=/host/models \
+  --env WEBGPU_MODEL=/host/models/model.onnx \
   docker.io/keniack/yolo-detection-demo:latest \
   yolo-detection-demo
 ```
 
-The guest defaults to `examples/yolo-detection-demo/models/model.onnx` as the model path. With `WEBGPU_MODEL_DIR=/host/models` the shim resolves it to `/host/models/examples/yolo-detection-demo/models/model.onnx`.
-
-Pass an explicit image and model path to override the defaults:
+Pass an explicit image path to override the default image:
 
 ```terminal
 sudo ctr run --rm \
@@ -129,10 +126,10 @@ sudo ctr run --rm \
   --env WEBGPU_REQUIRED=1 \
   --env WEBGPU_BACKEND=vulkan \
   --env WEBGPU_DEVICE_PATH=/dev/dri/renderD128 \
-  --env WEBGPU_MODEL_DIR=/host/models \
+  --env WEBGPU_MODEL=/host/models/model.onnx \
   docker.io/keniack/yolo-detection-demo:latest \
   yolo-detection-demo \
-  /yolo-detection-demo.wasm /images/golden-retriever.ppm examples/yolo-detection-demo/models/model.onnx
+  /yolo-detection-demo.wasm /images/golden-retriever.ppm
 ```
 
 On success, the output should include:
@@ -142,4 +139,4 @@ On success, the output should include:
 - ranked detections with `bbox_xywh_norm` and `bbox_xyxy`
 - `detection.runner=onnxruntime.host`
 
-This image stays `scratch`. The WebGPU shim keeps Vulkan on the host side and brokers WebGPU requests from the guest; host-only settings such as `WEBGPU_DEVICE_PATH` and `WEBGPU_MODEL_DIR` are not forwarded into the guest Wasm environment.
+This image stays `scratch`. The WebGPU shim keeps Vulkan on the host side and brokers WebGPU requests from the guest; host-only settings such as `WEBGPU_DEVICE_PATH` and `WEBGPU_MODEL` are not forwarded into the guest Wasm environment.
