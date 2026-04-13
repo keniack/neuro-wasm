@@ -45,13 +45,10 @@ target/wasm32-wasip1/debug/image-classification-demo.wasm
 ## Build An OCI Tar
 
 ```terminal
-cargo build \
-  -p image-classification-demo \
-  --target wasm32-wasip1 \
-  --features oci-v1-tar
+make build-examples-oci
 ```
 
-This also produces:
+This exports a standard OCI/rootfs container image tar to:
 
 ```terminal
 target/wasm32-wasip1/debug/image-classification-demo-img.tar

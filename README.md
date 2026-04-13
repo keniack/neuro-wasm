@@ -86,6 +86,13 @@ Build the demo OCI tar artifacts:
 make build-examples-oci
 ```
 
+That exports standard OCI/rootfs container images to:
+
+- `target/wasm32-wasip1/debug/webgpu-demo-img.tar`
+- `target/wasm32-wasip1/debug/image-classification-demo-img.tar`
+
+The examples themselves no longer use Cargo `build.rs` packaging. The local OCI tar export is handled at the repo level through Docker so the images behave like ordinary containers with a `.wasm` entrypoint in rootfs.
+
 Build and push both example container images to the default `keniack` repository:
 
 ```terminal

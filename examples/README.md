@@ -24,6 +24,8 @@ Build both OCI tar artifacts:
 make build-examples-oci
 ```
 
+The local tar artifacts are standard OCI/rootfs container images exported through Docker. The `.wasm` entrypoint lives inside the image filesystem and the shim runs it from the mounted container rootfs; these examples are not packaged through per-example Cargo `build.rs` scripts.
+
 Build both example container images:
 
 ```terminal

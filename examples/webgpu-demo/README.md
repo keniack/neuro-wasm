@@ -24,13 +24,10 @@ target/wasm32-wasip1/debug/webgpu-demo.wasm
 ## Build An OCI Tar
 
 ```terminal
-cargo build \
-  --manifest-path examples/webgpu-demo/Cargo.toml \
-  --target wasm32-wasip1 \
-  --features oci-v1-tar
+make build-examples-oci
 ```
 
-This also produces:
+This exports a standard OCI/rootfs container image tar to:
 
 ```terminal
 target/wasm32-wasip1/debug/webgpu-demo-img.tar

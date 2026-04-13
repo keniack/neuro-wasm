@@ -226,6 +226,10 @@ where
     let flags = parse(&os_args[1..]).unwrap();
     let argv0 = PathBuf::from(&os_args[0]);
     let argv0 = argv0.file_stem().unwrap_or_default().to_string_lossy();
+    let info_mode = os_args
+        .iter()
+        .skip(1)
+        .any(|arg| arg == "-info" || arg == "--info");
 
     if flags.version {
         println!("{argv0}:");
@@ -242,7 +246,9 @@ where
     {
         let default_config = Config::default();
         let config = config.as_ref().unwrap_or(&default_config);
-        init_zygote_and_logger(flags.debug, config);
+        if !info_mode {
+            init_zygote_and_logger(flags.debug, config);
+        }
     }
 
     #[cfg(feature = "opentelemetry")]
