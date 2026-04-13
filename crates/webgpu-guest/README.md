@@ -7,10 +7,13 @@ It hides the raw WebAssembly host imports and gives guest code a small typed API
 - `describe_runtime()`
 - `execute(...)`
 - `execute_raw(...)`
+- `detect(...)`
 - `bytes_from_f32_slice(...)`
 - `ComputeDispatch`
+- `ModelDetect`
 - `RuntimeDescription`
 - `DispatchResponse`
+- `DetectionResponse`
 
 ## Why Use It
 
@@ -64,6 +67,21 @@ let response: DispatchResponse = execute(
     &bytes_from_f32_slice(&input_a),
     &bytes_from_f32_slice(&input_b),
 )?;
+```
+
+For shim-owned object detection:
+
+```rust
+use webgpu_guest::{ModelDetect, detect};
+
+let request = ModelDetect::new("/models/yolov8l.onnx")
+    .score_threshold(0.25)
+    .iou_threshold(0.45)
+    .max_detections(20);
+// Optionally pin a host-side ONNX Runtime provider:
+// let request = request.provider("CUDAExecutionProvider");
+
+let response = detect(&request, &image_bytes)?;
 ```
 
 ## Build

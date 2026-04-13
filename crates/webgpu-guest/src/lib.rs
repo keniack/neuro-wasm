@@ -39,6 +39,28 @@ pub struct DispatchResponse {
     pub metadata: Value,
 }
 
+#[derive(Clone, Debug, Deserialize)]
+pub struct DetectionResponse {
+    pub kind: String,
+    pub task: String,
+    pub model_path: String,
+    pub model_format: String,
+    pub runner: String,
+    pub image_bytes: usize,
+    pub detection_count: usize,
+    pub detections: Vec<Detection>,
+    pub metadata: Value,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct Detection {
+    pub id: String,
+    pub label: String,
+    pub score: f32,
+    pub bbox_xywh_norm: [f32; 4],
+    pub bbox_xyxy: [u32; 4],
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ResultEncoding {
@@ -114,6 +136,76 @@ impl ComputeDispatch {
                     ResultEncoding::F32 => "f32".to_string(),
                 }),
             );
+        }
+        self
+    }
+
+    pub fn metadata(mut self, key: impl Into<String>, value: impl Into<Value>) -> Self {
+        if let Some(metadata) = self.metadata.as_object_mut() {
+            metadata.insert(key.into(), value.into());
+        }
+        self
+    }
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct ModelDetect {
+    kind: &'static str,
+    metadata: Value,
+}
+
+impl ModelDetect {
+    pub fn new(model_path: impl Into<String>) -> Self {
+        let mut metadata = Map::new();
+        metadata.insert("model_path".to_string(), Value::String(model_path.into()));
+        metadata.insert(
+            "task".to_string(),
+            Value::String("object-detection".to_string()),
+        );
+        metadata.insert("score_threshold".to_string(), Value::from(0.25));
+        metadata.insert("iou_threshold".to_string(), Value::from(0.45));
+        metadata.insert("max_detections".to_string(), Value::from(20));
+
+        Self {
+            kind: "model.detect",
+            metadata: Value::Object(metadata),
+        }
+    }
+
+    pub fn task(mut self, task: impl Into<String>) -> Self {
+        if let Some(metadata) = self.metadata.as_object_mut() {
+            metadata.insert("task".to_string(), Value::String(task.into()));
+        }
+        self
+    }
+
+    pub fn score_threshold(mut self, value: f32) -> Self {
+        if let Some(metadata) = self.metadata.as_object_mut() {
+            metadata.insert("score_threshold".to_string(), Value::from(value));
+        }
+        self
+    }
+
+    pub fn iou_threshold(mut self, value: f32) -> Self {
+        if let Some(metadata) = self.metadata.as_object_mut() {
+            metadata.insert("iou_threshold".to_string(), Value::from(value));
+        }
+        self
+    }
+
+    pub fn max_detections(mut self, value: usize) -> Self {
+        if let Some(metadata) = self.metadata.as_object_mut() {
+            metadata.insert(
+                "max_detections".to_string(),
+                Value::from(u64::try_from(value).unwrap_or(u64::MAX)),
+            );
+        }
+        self
+    }
+
+    pub fn provider(mut self, provider: impl Into<String>) -> Self {
+        if let Some(metadata) = self.metadata.as_object_mut() {
+            metadata.insert("provider".to_string(), Value::String(provider.into()));
         }
         self
     }
@@ -239,6 +331,10 @@ pub fn execute<TReq: Serialize, TRes: DeserializeOwned>(
     input_b: &[u8],
 ) -> Result<TRes, Error> {
     Client::default().execute(request, input_a, input_b)
+}
+
+pub fn detect(request: &ModelDetect, image_bytes: &[u8]) -> Result<DetectionResponse, Error> {
+    Client::default().execute(request, image_bytes, &[])
 }
 
 pub fn bytes_from_f32_slice(values: &[f32]) -> Vec<u8> {

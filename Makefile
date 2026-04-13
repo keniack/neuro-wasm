@@ -14,8 +14,10 @@ EXAMPLES_WASM_TARGET ?= wasm32-wasip1
 DEBIAN_BUILD_DEPS = build-essential clang libclang-dev libc6-dev libseccomp-dev vulkan-tools libvulkan1
 WEBGPU_DEMO_IMAGE = $(IMAGE_REPO)/webgpu-demo:$(IMAGE_TAG)
 IMAGE_CLASSIFICATION_DEMO_IMAGE = $(IMAGE_REPO)/image-classification-demo:$(IMAGE_TAG)
+YOLO_DETECTION_DEMO_IMAGE = $(IMAGE_REPO)/yolo-detection-demo:$(IMAGE_TAG)
 WEBGPU_DEMO_LOCAL_IMAGE = $(LOCAL_IMAGE_REPO)/webgpu-demo:$(LOCAL_IMAGE_TAG)
 IMAGE_CLASSIFICATION_DEMO_LOCAL_IMAGE = $(LOCAL_IMAGE_REPO)/image-classification-demo:$(LOCAL_IMAGE_TAG)
+YOLO_DETECTION_DEMO_LOCAL_IMAGE = $(LOCAL_IMAGE_REPO)/yolo-detection-demo:$(LOCAL_IMAGE_TAG)
 
 ifeq ($(OPT_PROFILE),release)
 RELEASE_FLAG = --release
@@ -39,10 +41,10 @@ EXAMPLES_BIN_DIR = target/$(EXAMPLES_WASM_TARGET)/$(PROFILE_DIR)
 build: build-webgpu build-examples
 
 .PHONY: docker-build-examples
-docker-build-examples: docker-build-webgpu-demo docker-build-image-classification-demo
+docker-build-examples: docker-build-webgpu-demo docker-build-image-classification-demo docker-build-yolo-detection-demo
 
 .PHONY: docker-push-examples
-docker-push-examples: docker-push-webgpu-demo docker-push-image-classification-demo
+docker-push-examples: docker-push-webgpu-demo docker-push-image-classification-demo docker-push-yolo-detection-demo
 
 .PHONY: install-build-deps-debian
 install-build-deps-debian:
@@ -57,6 +59,10 @@ docker-build-webgpu-demo:
 docker-build-image-classification-demo:
 	$(DOCKER) build -f examples/image-classification-demo/Dockerfile -t $(IMAGE_CLASSIFICATION_DEMO_IMAGE) .
 
+.PHONY: docker-build-yolo-detection-demo
+docker-build-yolo-detection-demo:
+	$(DOCKER) build -f examples/yolo-detection-demo/Dockerfile -t $(YOLO_DETECTION_DEMO_IMAGE) .
+
 .PHONY: docker-build-local-webgpu-demo
 docker-build-local-webgpu-demo:
 	$(DOCKER) build -f examples/webgpu-demo/Dockerfile -t $(WEBGPU_DEMO_LOCAL_IMAGE) .
@@ -64,6 +70,10 @@ docker-build-local-webgpu-demo:
 .PHONY: docker-build-local-image-classification-demo
 docker-build-local-image-classification-demo:
 	$(DOCKER) build -f examples/image-classification-demo/Dockerfile -t $(IMAGE_CLASSIFICATION_DEMO_LOCAL_IMAGE) .
+
+.PHONY: docker-build-local-yolo-detection-demo
+docker-build-local-yolo-detection-demo:
+	$(DOCKER) build -f examples/yolo-detection-demo/Dockerfile -t $(YOLO_DETECTION_DEMO_LOCAL_IMAGE) .
 
 .PHONY: docker-push-webgpu-demo
 docker-push-webgpu-demo: docker-build-webgpu-demo
@@ -73,6 +83,10 @@ docker-push-webgpu-demo: docker-build-webgpu-demo
 docker-push-image-classification-demo: docker-build-image-classification-demo
 	$(DOCKER) push $(IMAGE_CLASSIFICATION_DEMO_IMAGE)
 
+.PHONY: docker-push-yolo-detection-demo
+docker-push-yolo-detection-demo: docker-build-yolo-detection-demo
+	$(DOCKER) push $(YOLO_DETECTION_DEMO_IMAGE)
+
 .PHONY: build-webgpu
 build-webgpu:
 	$(CARGO) build $(TARGET_FLAG) $(RELEASE_FLAG) -p containerd-shim-webgpu
@@ -81,9 +95,10 @@ build-webgpu:
 build-examples:
 	$(CARGO) build --target $(EXAMPLES_WASM_TARGET) $(RELEASE_FLAG) -p webgpu-demo
 	$(CARGO) build --target $(EXAMPLES_WASM_TARGET) $(RELEASE_FLAG) -p image-classification-demo
+	$(CARGO) build --target $(EXAMPLES_WASM_TARGET) $(RELEASE_FLAG) -p yolo-detection-demo
 
 .PHONY: build-examples-oci
-build-examples-oci: export-webgpu-demo-oci export-image-classification-demo-oci
+build-examples-oci: export-webgpu-demo-oci export-image-classification-demo-oci export-yolo-detection-demo-oci
 
 .PHONY: export-webgpu-demo-oci
 export-webgpu-demo-oci: docker-build-local-webgpu-demo
@@ -94,6 +109,11 @@ export-webgpu-demo-oci: docker-build-local-webgpu-demo
 export-image-classification-demo-oci: docker-build-local-image-classification-demo
 	mkdir -p $(EXAMPLES_BIN_DIR)
 	$(DOCKER) save -o $(EXAMPLES_BIN_DIR)/image-classification-demo-img.tar $(IMAGE_CLASSIFICATION_DEMO_LOCAL_IMAGE)
+
+.PHONY: export-yolo-detection-demo-oci
+export-yolo-detection-demo-oci: docker-build-local-yolo-detection-demo
+	mkdir -p $(EXAMPLES_BIN_DIR)
+	$(DOCKER) save -o $(EXAMPLES_BIN_DIR)/yolo-detection-demo-img.tar $(YOLO_DETECTION_DEMO_LOCAL_IMAGE)
 
 .PHONY: install-webgpu
 install-webgpu:

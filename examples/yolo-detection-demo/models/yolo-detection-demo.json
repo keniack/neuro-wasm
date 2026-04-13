@@ -1,0 +1,41 @@
+{
+  "name": "yolo-detection-demo",
+  "task": "object-detection",
+  "top_k": 3,
+  "score_threshold": 0.5,
+  "input_dim": 4,
+  "labels": [
+    {
+      "id": "apple",
+      "label": "apple"
+    },
+    {
+      "id": "dog",
+      "label": "dog"
+    },
+    {
+      "id": "surfboard",
+      "label": "surfboard"
+    }
+  ],
+  "detections": [
+    {
+      "id": "apple_box",
+      "label_id": "apple",
+      "bbox_xywh": [0.53, 0.55, 0.42, 0.42],
+      "weights": [1.5, -1.0, -1.0, -0.2, -0.3]
+    },
+    {
+      "id": "dog_box",
+      "label_id": "dog",
+      "bbox_xywh": [0.56, 0.56, 0.72, 0.72],
+      "weights": [1.0, 1.4, -0.4, 0.5, -1.4]
+    },
+    {
+      "id": "surfboard_box",
+      "label_id": "surfboard",
+      "bbox_xywh": [0.5, 0.58, 0.78, 0.36],
+      "weights": [-0.2, 0.4, 1.4, -0.1, -0.8]
+    }
+  ]
+}

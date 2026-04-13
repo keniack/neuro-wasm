@@ -1,4 +1,5 @@
 use std::env;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
 use anyhow::{Context, Result, anyhow, bail};
@@ -17,11 +18,12 @@ const EXECUTE_FN: &str = "execute";
 pub(crate) struct WebGpuHostState {
     config: WebGpuConfig,
     broker_addr: Option<String>,
+    rootfs_dir: Option<PathBuf>,
     // Reuse a single native device/queue across guest host calls inside the sandbox.
     runtime: Arc<OnceLock<Arc<WebGpuRuntime>>>,
 }
 
-struct WebGpuRuntime {
+pub(crate) struct WebGpuRuntime {
     device: wgpu::Device,
     queue: wgpu::Queue,
     backend: String,
@@ -46,16 +48,16 @@ struct WebGpuRuntimeDescription {
 }
 
 #[derive(Debug, Deserialize)]
-struct WebGpuExecutionRequest {
-    kind: String,
+pub(crate) struct WebGpuExecutionRequest {
+    pub(crate) kind: String,
     #[serde(default)]
-    entrypoint: String,
+    pub(crate) entrypoint: String,
     #[serde(default)]
-    workgroups: Option<[u32; 3]>,
+    pub(crate) workgroups: Option<[u32; 3]>,
     #[serde(default)]
-    metadata: Value,
+    pub(crate) metadata: Value,
     #[serde(default = "default_output_words")]
-    output_words: usize,
+    pub(crate) output_words: usize,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -107,7 +109,7 @@ pub(crate) fn build_import(
 ) -> Result<ImportObject<WebGpuHostState>> {
     let mut builder = ImportObjectBuilder::new(
         WEBGPU_IMPORT_MODULE,
-        WebGpuHostState::new(config, broker_addr),
+        WebGpuHostState::new(config, broker_addr, None),
     )
     .context("creating WebGPU import module")?;
 
@@ -224,23 +226,33 @@ fn runtime_description(state: &WebGpuHostState) -> WebGpuRuntimeDescription {
 }
 
 impl WebGpuHostState {
-    fn new(config: &WebGpuConfig, broker_addr: Option<&str>) -> Self {
+    fn new(config: &WebGpuConfig, broker_addr: Option<&str>, rootfs_dir: Option<PathBuf>) -> Self {
         Self {
             config: config.clone(),
             broker_addr: broker_addr
                 .map(ToOwned::to_owned)
                 .or_else(|| env::var(crate::broker::BROKER_ADDR_ENV).ok())
                 .filter(|value| !value.is_empty()),
+            rootfs_dir,
             runtime: Arc::new(OnceLock::new()),
         }
     }
 
-    pub(crate) fn direct(config: &WebGpuConfig) -> Self {
+    pub(crate) fn direct(config: &WebGpuConfig, rootfs_dir: Option<PathBuf>) -> Self {
         Self {
             config: config.clone(),
             broker_addr: None,
+            rootfs_dir,
             runtime: Arc::new(OnceLock::new()),
         }
+    }
+
+    pub(crate) fn rootfs_dir(&self) -> Option<&Path> {
+        self.rootfs_dir.as_deref()
+    }
+
+    pub(crate) fn config(&self) -> &WebGpuConfig {
+        &self.config
     }
 }
 
@@ -258,12 +270,13 @@ pub(crate) fn execute_payload(
         .map_err(|err| anyhow!("runtime access denied: {err:?}"))?;
     let request: WebGpuExecutionRequest =
         serde_json::from_slice(request_bytes).context("parsing execution request")?;
-    let runtime = ensure_runtime(state)?;
 
     match request.kind.as_str() {
         "compute.dispatch" => {
+            let runtime = ensure_runtime(state)?;
             execute_dispatch(&state.config, runtime.as_ref(), &request, input_a, input_b)
         }
+        "model.detect" => crate::model::execute_model_detect(state, &request, input_a),
         other => Err(anyhow!("unsupported webgpu execution kind: {other}")),
     }
 }
@@ -374,7 +387,7 @@ impl WebGpuRuntime {
         })
     }
 
-    fn run_compute(
+    pub(crate) fn run_compute(
         &self,
         shader_source: &str,
         entrypoint: &str,
@@ -522,7 +535,7 @@ impl WebGpuRuntime {
     }
 }
 
-fn ensure_runtime(state: &WebGpuHostState) -> Result<Arc<WebGpuRuntime>> {
+pub(crate) fn ensure_runtime(state: &WebGpuHostState) -> Result<Arc<WebGpuRuntime>> {
     if let Some(runtime) = state.runtime.get() {
         return Ok(runtime.clone());
     }
@@ -538,7 +551,7 @@ fn ensure_runtime(state: &WebGpuHostState) -> Result<Arc<WebGpuRuntime>> {
     }
 }
 
-fn validate_runtime_access(config: &WebGpuConfig) -> Result<(), CoreError> {
+pub(crate) fn validate_runtime_access(config: &WebGpuConfig) -> Result<(), CoreError> {
     if !config.enabled {
         return Err(host_error("WEBGPU_ENABLED=0 blocks webgpu.execute"));
     }

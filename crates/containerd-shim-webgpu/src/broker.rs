@@ -42,7 +42,8 @@ mod imp {
             .cloned()
             .unwrap_or_default();
         let middleware = WebGpuMiddleware::new(&envs)?;
-        let state = WebGpuHostState::direct(middleware.config());
+        // The broker runs outside the guest, so keep the host-visible rootfs path here.
+        let state = WebGpuHostState::direct(middleware.config(), Some(cfg.bundle.join("rootfs")));
         let socket = BrokerSocket::new(cfg.bundle.as_path(), id)?;
         let broker = WebGpuBroker::start(id, &socket, state)?;
 

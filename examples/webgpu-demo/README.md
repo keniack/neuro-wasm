@@ -71,13 +71,15 @@ Use the explicit Wasm path form with `ctr run`. That makes the intended guest ar
 ```terminal
 sudo ctr images import --all-platforms target/wasm32-wasip1/debug/webgpu-demo-img.tar
 
+sudo ctr images pull docker.io/keniack/webgpu-demo:latest
+
 sudo ctr run --rm \
   --runtime=io.containerd.webgpu.v1 \
   --env WEBGPU_ENABLED=1 \
   --env WEBGPU_REQUIRED=1 \
   --env WEBGPU_BACKEND=vulkan \
   --env WEBGPU_DEVICE_PATH=/dev/dri/renderD128 \
-  docker.io/keniack/webgpu-demo:local \
+  docker.io/keniack/webgpu-demo:latest \
   webgpu-demo \
   /webgpu-demo.wasm dispatch 16
 ```

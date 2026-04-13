@@ -16,6 +16,7 @@ The shim uses native `wgpu` on the host. In practice that means:
 - optional GPU device-path discovery for common Linux layouts
 - a generic `webgpu` host import module for guest Wasm modules
 - real GPU-backed `compute.dispatch` execution through native `wgpu`
+- shim-owned `model.detect` execution for object detection workloads
 
 ## Guest ABI
 
@@ -53,6 +54,38 @@ The response JSON includes:
 - output buffer size and checksum
 - raw `output_words`
 - optional decoded `output_f32`
+
+## `model.detect` Contract
+
+`execute` also accepts `kind = "model.detect"` requests.
+
+The request metadata contains:
+
+- `model_path` - absolute in-container model path, for example `/models/yolov8l.onnx`
+- `task` - currently `object-detection`
+- `score_threshold`
+- `iou_threshold`
+- `max_detections`
+- `provider` - optional ONNX Runtime execution provider override
+
+The guest passes image bytes in `input_a`. The shim resolves `model_path` against the
+container rootfs on the host, loads the model there, executes detection in the broker,
+and returns JSON detections to the guest.
+
+Model formats:
+
+- `.json` - lightweight demo model executed through the existing host-side `wgpu` path
+- `.onnx` - ONNX model executed through a host-side ONNX Runtime helper
+
+`.onnx` support requires the machine running `containerd-shim-webgpu-v1` to have:
+
+- `python3`
+- `onnxruntime`
+- `numpy`
+- `Pillow`
+
+If `provider` is omitted, the shim-side runner will choose the first suitable
+ONNX Runtime execution provider available on the host and fall back to CPU.
 
 ## Build
 
@@ -121,3 +154,4 @@ The vendored `runwasi` shim now logs workload classification details, including 
 
 - [webgpu-demo](/Users/kenia/workspace/neuro-wasm/examples/webgpu-demo/README.md:1)
 - [image-classification-demo](/Users/kenia/workspace/neuro-wasm/examples/image-classification-demo/README.md:1)
+- [yolo-detection-demo](/Users/kenia/workspace/neuro-wasm/examples/yolo-detection-demo/README.md:1)

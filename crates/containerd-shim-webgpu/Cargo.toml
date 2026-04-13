@@ -9,6 +9,7 @@ anyhow = { workspace = true }
 cfg-if = { workspace = true }
 containerd-shimkit = { workspace = true }
 containerd-shim-wasm = { workspace = true, features = ["opentelemetry"] }
+image = { version = "0.24.9", default-features = false, features = ["jpeg", "png", "pnm"] }
 log = { workspace = true }
 oci-spec = { workspace = true }
 serde = { workspace = true, features = ["derive"] }

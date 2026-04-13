@@ -17,12 +17,11 @@ The response metadata is compact. The shim does not echo the full WGSL source ba
 
 The guest code uses the workspace `webgpu_guest` helper crate, so it does not need to declare the raw WebAssembly imports manually. The current example uses `ComputeDispatch`, `execute(...)`, and `bytes_from_f32_slice(...)`.
 
-This is still a lightweight demo model, not a full ResNet or YOLO graph runner. The important part is that the logits come from a real GPU dispatch through the generic `webgpu.execute` ABI, not from synthetic host-side scoring.
+This is still a lightweight demo model, not a full ResNet or YOLO graph runner. The important part is that the logits come from a real GPU dispatch through the generic `webgpu.execute` ABI, not from synthetic host-side scoring. For a separate shim-owned detection example with optional `.onnx` support, see [examples/yolo-detection-demo/README.md](/Users/kenia/workspace/neuro-wasm/examples/yolo-detection-demo/README.md:1).
 
 ## Bundled Assets
 
 - `models/resnet50-demo.json`
-- `models/yolo-demo.json`
 - `images/red-apple.ppm`
 - `images/ocean.ppm`
 - `images/golden-retriever.ppm`
@@ -98,13 +97,15 @@ If you do not pass explicit args, the image defaults to `/images/red-apple.ppm /
 ```terminal
 sudo ctr images import --all-platforms target/wasm32-wasip1/debug/image-classification-demo-img.tar
 
+sudo ctr images pull docker.io/keniack/image-classification-demo:latest
+
 sudo ctr run --rm \
   --runtime=io.containerd.webgpu.v1 \
   --env WEBGPU_ENABLED=1 \
   --env WEBGPU_REQUIRED=1 \
   --env WEBGPU_BACKEND=vulkan \
   --env WEBGPU_DEVICE_PATH=/dev/dri/renderD128 \
-  docker.io/keniack/image-classification-demo:local \
+  docker.io/keniack/image-classification-demo:latest \
   image-classification-demo
 ```
 

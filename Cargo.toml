@@ -3,6 +3,7 @@ members = [
     "crates/containerd-shim-webgpu",
     "crates/webgpu-guest",
     "examples/image-classification-demo",
+    "examples/yolo-detection-demo",
     "examples/webgpu-demo",
 ]
 exclude = ["vendor/oci-tar-builder-legacy"]
@@ -10,6 +11,7 @@ default-members = [
     "crates/containerd-shim-webgpu",
     "crates/webgpu-guest",
     "examples/image-classification-demo",
+    "examples/yolo-detection-demo",
     "examples/webgpu-demo",
 ]
 resolver = "2"
