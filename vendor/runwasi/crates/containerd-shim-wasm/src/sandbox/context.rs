@@ -113,13 +113,16 @@ impl WasiContext<'_> {
             .process()
             .as_ref()
             .map(|process| process.cwd().clone())
-            .filter(|cwd| !cwd.is_empty())
-            .unwrap_or_else(|| "/".to_string());
+            .filter(|cwd| !cwd.as_os_str().is_empty())
+            .unwrap_or_else(|| PathBuf::from("/"));
 
         let resolved = if path.is_absolute() {
             rootfs.join(path.strip_prefix("/").ok()?)
         } else {
-            rootfs.join(container_cwd.trim_start_matches('/')).join(path)
+            let cwd = container_cwd
+                .strip_prefix("/")
+                .unwrap_or(container_cwd.as_path());
+            rootfs.join(cwd).join(path)
         };
 
         log::debug!(
