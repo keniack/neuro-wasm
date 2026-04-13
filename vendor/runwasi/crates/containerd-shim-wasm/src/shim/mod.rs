@@ -59,7 +59,7 @@
 mod shim;
 
 pub(crate) use instance::Instance;
-pub use shim::{Compiler, Shim, Version};
+pub use shim::{Compiler, InstanceGuard, Shim, Version};
 
 use crate::sys::container::instance;
 
