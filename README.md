@@ -37,6 +37,8 @@ The demo Wasm modules build on macOS, but the native containerd shim currently n
 
 The Linux build also needs a working C toolchain for `bindgen`. `wasmedge-sys` generates bindings from `wasmedge.h`, so Clang and the system libc development headers must be installed.
 
+The default shim build uses the standalone dynamic WasmEdge library instead of static linking. That avoids extra linker dependencies during build, but the resulting binary needs `libwasmedge.so` available on the runtime library path unless you opt into the `static` feature yourself.
+
 ## Build
 
 Build the shim:
