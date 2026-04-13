@@ -28,15 +28,15 @@ containerd-shim = "0.8"
 # Vendored support crates from runwasi v1.0.0.
 containerd-shimkit = { path = "vendor/runwasi/crates/containerd-shimkit", package = "containerd-shimkit" }
 containerd-shim-wasm-test-modules = { path = "vendor/runwasi/crates/containerd-shim-wasm-test-modules", package = "containerd-shim-wasm-test-modules" }
-# Use a vendored copy of the upstream v1.0.0 workspace so the transitive
-# libcontainer version stays aligned with the original runwasi lockfile.
+# Use a vendored copy of the upstream v1.0.0 workspace and pin the core
+# libcontainer/oci-spec pair so lockfile regeneration stays deterministic.
 containerd-shim-wasm = { path = "vendor/runwasi/crates/containerd-shim-wasm", package = "containerd-shim-wasm" }
 env_logger = "0.11"
 libc = "0.2.177"
-libcontainer = { version = "=0.5.3", default-features = false }
+libcontainer = { version = "=0.5.7", default-features = false }
 log = "0.4"
 nix = "0.29"
-oci-spec = { version = "0.7.1", features = ["runtime"] }
+oci-spec = { version = "=0.8.4", features = ["runtime"] }
 oci-tar-builder = { path = "vendor/runwasi/crates/oci-tar-builder", package = "oci-tar-builder" }
 protobuf = "=3.2"
 serde = "1.0"

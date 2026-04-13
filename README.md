@@ -18,7 +18,7 @@ The main runtime is [containerd-shim-webgpu](/Users/kenia/workspace/neuro-wasm/c
 - [examples/webgpu-demo](/Users/kenia/workspace/neuro-wasm/examples/webgpu-demo/README.md:1) - generic WGSL dispatch smoke test
 - [examples/image-classification-demo](/Users/kenia/workspace/neuro-wasm/examples/image-classification-demo/README.md:1) - image classification over a real GPU tensor dispatch
 
-The shim support crates are vendored from the upstream `containerd/runwasi` `containerd-shim-wasm/v1.0.0` release so the dependency graph stays aligned with the original upstream lockfile.
+The shim support crates are vendored from the upstream `containerd/runwasi` `containerd-shim-wasm/v1.0.0` release so the dependency graph can be pinned locally instead of drifting with upstream git and crates.io resolution.
 
 ## Prerequisites
 
