@@ -482,7 +482,7 @@ impl WebGpuRuntime {
             .context("mapping GPU readback buffer")?;
 
         let data = slice.get_mapped_range().to_vec();
-        drop(slice);
+        let _ = slice;
         readback_buffer.unmap();
         Ok(data)
     }
