@@ -1,12 +1,14 @@
 [workspace]
 members = [
     "crates/containerd-shim-webgpu",
+    "crates/webgpu-guest",
     "examples/image-classification-demo",
     "examples/webgpu-demo",
 ]
 exclude = ["vendor/oci-tar-builder-legacy"]
 default-members = [
     "crates/containerd-shim-webgpu",
+    "crates/webgpu-guest",
     "examples/image-classification-demo",
     "examples/webgpu-demo",
 ]
@@ -50,6 +52,7 @@ tokio = { version = "1.44.2", default-features = false }
 tracing = "0.1"
 wat = "1.228"
 windows-sys = "0.59"
+webgpu-guest = { path = "crates/webgpu-guest" }
 
 [profile.release]
 panic = "abort"

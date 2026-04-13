@@ -15,6 +15,7 @@ The main runtime is [containerd-shim-webgpu](/Users/kenia/workspace/neuro-wasm/c
 ## Workspace Layout
 
 - [crates/containerd-shim-webgpu](/Users/kenia/workspace/neuro-wasm/crates/containerd-shim-webgpu/README.md:1) - the WebGPU shim
+- [crates/webgpu-guest](/Users/kenia/workspace/neuro-wasm/crates/webgpu-guest/README.md:1) - guest-side SDK for Wasm applications
 - [examples/webgpu-demo](/Users/kenia/workspace/neuro-wasm/examples/webgpu-demo/README.md:1) - generic WGSL dispatch smoke test
 - [examples/image-classification-demo](/Users/kenia/workspace/neuro-wasm/examples/image-classification-demo/README.md:1) - image classification over a real GPU tensor dispatch
 
@@ -102,6 +103,49 @@ Override the repository or tag when needed:
 ```terminal
 make docker-push-examples IMAGE_REPO=keniack IMAGE_TAG=v0.1.0
 ```
+
+## Build Guest Apps
+
+Guest Wasm applications should use the workspace SDK crate [crates/webgpu-guest](/Users/kenia/workspace/neuro-wasm/crates/webgpu-guest/README.md:1) instead of declaring the raw `extern "C"` imports by hand.
+
+Inside this workspace, add:
+
+```toml
+[dependencies]
+webgpu-guest = { workspace = true }
+serde_json = { workspace = true }
+```
+
+Then build requests through the SDK:
+
+```rust
+use webgpu_guest::{
+    ComputeDispatch, DispatchResponse, ResultEncoding, bytes_from_f32_slice,
+    describe_runtime, execute,
+};
+
+let runtime = describe_runtime()?;
+
+let request = ComputeDispatch::new("add_vectors", shader_source, element_count)
+    .workgroups([1, 1, 1])
+    .params_u32([element_count as u32, 0, 0, 0])
+    .result_encoding(ResultEncoding::F32)
+    .metadata("label", "vector-add");
+
+let response: DispatchResponse = execute(
+    &request,
+    &bytes_from_f32_slice(&input_a),
+    &bytes_from_f32_slice(&input_b),
+)?;
+```
+
+Build the guest module with:
+
+```terminal
+cargo build --target wasm32-wasip1
+```
+
+Then package it as a normal OCI/rootfs image, for example a `scratch` image with the `.wasm` file copied to `/app.wasm` and `ENTRYPOINT ["/app.wasm"]`.
 
 ## Install
 

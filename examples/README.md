@@ -3,6 +3,10 @@
 - `webgpu-demo` - sends a real WGSL vector-add kernel through the generic `webgpu.execute` dispatch API and prints the GPU-computed output tensor.
 - `image-classification-demo` - queries `webgpu.describe_runtime`, then loads a lightweight model and an input image and runs a real GPU matrix-vector inference pass through the same generic dispatch API.
 
+Both examples run as ordinary `scratch` OCI images. The guest only sees the `webgpu` ABI; the shim owns the native GPU stack and brokers requests on the host side.
+
+Guest code should use the `webgpu_guest` helper crate in this workspace rather than declaring the raw `extern "C"` imports manually. That crate hides the low-level import block and provides safe helpers such as `describe_runtime()`, `execute(...)`, `bytes_from_f32_slice(...)`, and the typed `ComputeDispatch` builder.
+
 ## Build
 
 Build and install the shim on Linux:
@@ -73,6 +77,12 @@ Run `webgpu-demo`:
 
 Use the explicit Wasm path form with `ctr run`. It matches the argv the guest expects and avoids accidental entrypoint overrides.
 
+Guest argv:
+
+```text
+["/webgpu-demo.wasm", "dispatch", "16"]
+```
+
 ```terminal
 sudo ctr run --rm \
   --runtime=io.containerd.webgpu.v1 \
@@ -85,7 +95,17 @@ sudo ctr run --rm \
   /webgpu-demo.wasm dispatch 16
 ```
 
+The runtime output should report a real host adapter plus a successful dispatch. `dispatch.metadata` is intentionally compact: the shim strips the echoed WGSL source and replaces it with summary fields such as `shader_source_bytes` and `params_u32_len`.
+
 Run `image-classification-demo`:
+
+This example does not use `dispatch 16`. Its guest argv is:
+
+```text
+["/image-classification-demo.wasm", "<image-path>", "[model-path]"]
+```
+
+Use the image defaults:
 
 ```terminal
 sudo ctr run --rm \
@@ -96,6 +116,20 @@ sudo ctr run --rm \
   --env WEBGPU_DEVICE_PATH=/dev/dri/renderD128 \
   docker.io/keniack/image-classification-demo:local \
   image-classification-demo
+```
+
+Or pass the Wasm path plus explicit asset paths:
+
+```terminal
+sudo ctr run --rm \
+  --runtime=io.containerd.webgpu.v1 \
+  --env WEBGPU_ENABLED=1 \
+  --env WEBGPU_REQUIRED=1 \
+  --env WEBGPU_BACKEND=vulkan \
+  --env WEBGPU_DEVICE_PATH=/dev/dri/renderD128 \
+  docker.io/keniack/image-classification-demo:local \
+  image-classification-demo \
+  /image-classification-demo.wasm /images/red-apple.ppm /models/resnet50-demo.json
 ```
 
 Or pull the pushed registry images and run those directly:

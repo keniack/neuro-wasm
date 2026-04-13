@@ -2,10 +2,13 @@ use std::env;
 use std::fs;
 use std::process;
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use webgpu_guest::{
+    ComputeDispatch, DispatchResponse, ResultEncoding, RuntimeDescription, bytes_from_f32_slice,
+    describe_runtime, execute,
+};
 
 const DEFAULT_MODEL_PATH: &str = "/models/resnet50-demo.json";
-const OUTPUT_BUFFER_SIZE: usize = 16 * 1024;
 const CLASSIFIER_SHADER: &str = r#"
 @group(0) @binding(0) var<storage, read> weights: array<f32>;
 @group(0) @binding(1) var<storage, read> features: array<f32>;
@@ -49,38 +52,6 @@ struct DemoLabel {
     label: String,
 }
 
-#[derive(Debug, Deserialize)]
-struct RuntimeDescription {
-    enabled: bool,
-    backend: String,
-    adapter_name: String,
-    device_available: bool,
-    runtime_ready: bool,
-    runtime_error: Option<String>,
-    max_buffer_size: u64,
-    max_bind_groups: u32,
-    force_fallback_adapter: bool,
-    required: bool,
-}
-
-#[derive(Debug, Deserialize)]
-struct DispatchResponse {
-    kind: String,
-    entrypoint: String,
-    backend: String,
-    adapter_name: String,
-    workgroups: [u32; 3],
-    invocations: u32,
-    checksum: u64,
-    input_a_len: usize,
-    input_b_len: usize,
-    output_bytes: usize,
-    result_encoding: String,
-    output_words: Vec<u32>,
-    output_f32: Option<Vec<f32>>,
-    metadata: serde_json::Value,
-}
-
 #[derive(Debug)]
 struct ClassificationResponse {
     model: String,
@@ -96,33 +67,6 @@ struct Prediction {
     id: String,
     label: String,
     score: f32,
-}
-
-#[derive(Debug, Serialize)]
-struct ExecuteRequest<'a> {
-    kind: &'a str,
-    entrypoint: &'a str,
-    workgroups: Option<[u32; 3]>,
-    output_words: usize,
-    metadata: serde_json::Value,
-}
-
-#[link(wasm_import_module = "webgpu")]
-unsafe extern "C" {
-    #[link_name = "describe_runtime"]
-    fn webgpu_describe_runtime(output_ptr: *mut u8, output_cap: i32) -> i32;
-
-    #[link_name = "execute"]
-    fn webgpu_execute(
-        request_ptr: *const u8,
-        request_len: i32,
-        input_a_ptr: *const u8,
-        input_a_len: i32,
-        input_b_ptr: *const u8,
-        input_b_len: i32,
-        output_ptr: *mut u8,
-        output_cap: i32,
-    ) -> i32;
 }
 
 fn main() {
@@ -207,74 +151,28 @@ fn main() {
     println!("prediction.model={}", response.model);
 }
 
-fn describe_runtime() -> Result<RuntimeDescription, String> {
-    let mut output = vec![0u8; OUTPUT_BUFFER_SIZE];
-    let written = unsafe {
-        webgpu_describe_runtime(
-            output.as_mut_ptr(),
-            i32::try_from(output.len()).map_err(|_| "output buffer too large")?,
-        )
-    };
-
-    if written < 0 {
-        return Err("webgpu.describe_runtime returned an error".to_string());
-    }
-
-    let written = usize::try_from(written).map_err(|_| "invalid runtime description size")?;
-    serde_json::from_slice::<RuntimeDescription>(&output[..written])
-        .map_err(|err| format!("invalid runtime description json: {err}"))
-}
-
 fn classify_via_webgpu(
     model: &DemoModel,
     image_bytes: &[u8],
 ) -> Result<ClassificationResponse, String> {
     let (features, image_width, image_height) = extract_image_features(image_bytes)?;
-    let weight_bytes = encode_f32_slice(&flatten_weights(model));
-    let feature_bytes = encode_f32_slice(&features_with_bias(&features));
+    let weight_bytes = bytes_from_f32_slice(&flatten_weights(model));
+    let feature_bytes = bytes_from_f32_slice(&features_with_bias(&features));
     let stride =
         u32::try_from(model.input_dim + 1).map_err(|_| "model input dimension is too large")?;
     let class_count =
         u32::try_from(model.labels.len()).map_err(|_| "model class count is too large")?;
 
-    let request = ExecuteRequest {
-        kind: "compute.dispatch",
-        entrypoint: "matmul_logits",
-        workgroups: Some([div_ceil_u32(class_count, 64), 1, 1]),
-        output_words: model.labels.len(),
-        metadata: serde_json::json!({
-            "shader_source": CLASSIFIER_SHADER,
-            "params_u32": [stride, class_count, 0, 0],
-            "result_encoding": "f32",
-            "task": model.task,
-            "model_name": model.name,
-            "input_type": "image-features"
-        }),
-    };
+    let request = ComputeDispatch::new("matmul_logits", CLASSIFIER_SHADER, model.labels.len())
+        .workgroups([div_ceil_u32(class_count, 64), 1, 1])
+        .params_u32([stride, class_count, 0, 0])
+        .result_encoding(ResultEncoding::F32)
+        .metadata("task", model.task.clone())
+        .metadata("model_name", model.name.clone())
+        .metadata("input_type", "image-features");
 
-    let request_bytes =
-        serde_json::to_vec(&request).map_err(|err| format!("invalid request json: {err}"))?;
-    let mut output = vec![0u8; OUTPUT_BUFFER_SIZE];
-    let written = unsafe {
-        webgpu_execute(
-            request_bytes.as_ptr(),
-            i32::try_from(request_bytes.len()).map_err(|_| "request is too large")?,
-            weight_bytes.as_ptr(),
-            i32::try_from(weight_bytes.len()).map_err(|_| "weight buffer is too large")?,
-            feature_bytes.as_ptr(),
-            i32::try_from(feature_bytes.len()).map_err(|_| "feature buffer is too large")?,
-            output.as_mut_ptr(),
-            i32::try_from(output.len()).map_err(|_| "output buffer is too large")?,
-        )
-    };
-
-    if written < 0 {
-        return Err("webgpu.execute returned an error".to_string());
-    }
-
-    let written = usize::try_from(written).map_err(|_| "invalid output size")?;
-    let dispatch = serde_json::from_slice::<DispatchResponse>(&output[..written])
-        .map_err(|err| format!("invalid dispatch response json: {err}"))?;
+    let dispatch: DispatchResponse = execute(&request, &weight_bytes, &feature_bytes)
+        .map_err(|err| format!("dispatch failed: {err}"))?;
     let logits = dispatch
         .output_f32
         .clone()
@@ -368,13 +266,6 @@ fn features_with_bias(features: &[f32]) -> Vec<f32> {
     let mut values = features.to_vec();
     values.push(1.0);
     values
-}
-
-fn encode_f32_slice(values: &[f32]) -> Vec<u8> {
-    values
-        .iter()
-        .flat_map(|value| value.to_le_bytes())
-        .collect()
 }
 
 fn print_runtime(runtime: &RuntimeDescription) {
