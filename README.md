@@ -11,7 +11,7 @@ The main runtime is [containerd-shim-webgpu](/Users/kenia/workspace/neuro-wasm/c
 
 - real vector-add on the GPU
 - real tensor-style matrix-vector inference for image classification
-- shim-owned object detection over `.json` or `.onnx` models
+- shim-owned ONNX object detection with models loaded from the host
 
 The same host import module also exposes a shim-owned `model.detect` flow through the existing `execute(...)` ABI. In that mode, the guest sends image bytes plus a model path and the shim resolves and runs the model on the host side, keeping the guest isolated. The shim looks for the model inside the container rootfs first, then falls back to the host directory configured by `WEBGPU_MODEL_DIR`.
 
@@ -21,7 +21,7 @@ The same host import module also exposes a shim-owned `model.detect` flow throug
 - [crates/webgpu-guest](/Users/kenia/workspace/neuro-wasm/crates/webgpu-guest/README.md:1) - guest-side SDK for Wasm applications
 - [examples/webgpu-demo](/Users/kenia/workspace/neuro-wasm/examples/webgpu-demo/README.md:1) - generic WGSL dispatch smoke test
 - [examples/image-classification-demo](/Users/kenia/workspace/neuro-wasm/examples/image-classification-demo/README.md:1) - image classification over a real GPU tensor dispatch
-- [examples/yolo-detection-demo](/Users/kenia/workspace/neuro-wasm/examples/yolo-detection-demo/README.md:1) - shim-owned detection over `.json` or `.onnx` models
+- [examples/yolo-detection-demo](/Users/kenia/workspace/neuro-wasm/examples/yolo-detection-demo/README.md:1) - shim-owned ONNX object detection loaded from the host via `WEBGPU_MODEL_DIR`
 
 The shim support crates are vendored from the upstream `containerd/runwasi` `containerd-shim-wasm/v1.0.0` release so the dependency graph can be pinned locally instead of drifting with upstream git and crates.io resolution.
 

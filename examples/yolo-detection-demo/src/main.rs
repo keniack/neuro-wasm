@@ -1,12 +1,10 @@
 use std::env;
 use std::fs;
-use std::path::Path;
 use std::process;
 
 use webgpu_guest::{DetectionResponse, ModelDetect, RuntimeDescription, describe_runtime, detect};
 
-const DEFAULT_ONNX_MODEL_PATH: &str = "/models/yolov8l.onnx";
-const FALLBACK_JSON_MODEL_PATH: &str = "/models/yolo-detection-demo.json";
+const DEFAULT_MODEL_PATH: &str = "examples/yolo-detection-demo/models/model.onnx";
 
 fn main() {
     let mut args = env::args().skip(1);
@@ -17,7 +15,7 @@ fn main() {
             process::exit(1);
         }
     };
-    let model_path = args.next().unwrap_or_else(default_model_path);
+    let model_path = args.next().unwrap_or_else(|| DEFAULT_MODEL_PATH.to_string());
 
     let image_bytes = fs::read(&image_path).unwrap_or_else(|err| {
         eprintln!("failed to read image at {image_path}: {err}");
@@ -28,9 +26,9 @@ fn main() {
         process::exit(3);
     });
 
-    // The guest only provides the image bytes and an in-container model path.
-    // The shim resolves the path inside the bundle rootfs, loads the model on the host,
-    // runs detection there, and returns structured results to the guest.
+    // The guest provides the image bytes and a model path.
+    // The shim resolves the path on the host (container rootfs or WEBGPU_MODEL_DIR),
+    // runs ONNX detection there, and returns structured results to the guest.
     let request = ModelDetect::new(model_path.clone())
         .task("object-detection")
         .score_threshold(0.25)
@@ -46,16 +44,6 @@ fn main() {
     println!("input.model={model_path}");
     print_runtime(&runtime);
     print_detection_response(&response);
-}
-
-fn default_model_path() -> String {
-    // Prefer a real ONNX checkpoint when the image contains one, but keep the tiny
-    // bundled JSON model as a fallback so the repo still ships a runnable smoke test.
-    if Path::new(DEFAULT_ONNX_MODEL_PATH).exists() {
-        DEFAULT_ONNX_MODEL_PATH.to_string()
-    } else {
-        FALLBACK_JSON_MODEL_PATH.to_string()
-    }
 }
 
 fn print_runtime(runtime: &RuntimeDescription) {

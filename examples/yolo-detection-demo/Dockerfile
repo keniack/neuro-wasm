@@ -18,7 +18,6 @@ FROM scratch
 
 COPY --from=builder /workspace/target/wasm32-wasip1/release/yolo-detection-demo.wasm /yolo-detection-demo.wasm
 COPY --from=builder /workspace/examples/image-classification-demo/images /images
-COPY --from=builder /workspace/examples/yolo-detection-demo/models /models
 
 ENTRYPOINT ["/yolo-detection-demo.wasm"]
 CMD ["/images/golden-retriever.ppm"]
