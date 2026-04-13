@@ -2,7 +2,7 @@
 
 This workspace is focused on a real GPU-backed WebGPU-style compute shim for WasmEdge workloads.
 
-The main runtime is [containerd-shim-webgpu](/Users/kenia/workspace/runwasi/crates/containerd-shim-webgpu/README.md:1). It exposes a generic `webgpu` host import module to guest Wasm workloads:
+The main runtime is [containerd-shim-webgpu](/Users/kenia/workspace/neuro-wasm/crates/containerd-shim-webgpu/README.md:1). It exposes a generic `webgpu` host import module to guest Wasm workloads:
 
 - `describe_runtime`
 - `execute`
@@ -14,11 +14,11 @@ The main runtime is [containerd-shim-webgpu](/Users/kenia/workspace/runwasi/crat
 
 ## Workspace Layout
 
-- [crates/containerd-shim-webgpu](/Users/kenia/workspace/runwasi/crates/containerd-shim-webgpu/README.md:1) - the WebGPU shim
-- [examples/webgpu-demo](/Users/kenia/workspace/runwasi/examples/webgpu-demo/README.md:1) - generic WGSL dispatch smoke test
-- [examples/image-classification-demo](/Users/kenia/workspace/runwasi/examples/image-classification-demo/README.md:1) - image classification over a real GPU tensor dispatch
+- [crates/containerd-shim-webgpu](/Users/kenia/workspace/neuro-wasm/crates/containerd-shim-webgpu/README.md:1) - the WebGPU shim
+- [examples/webgpu-demo](/Users/kenia/workspace/neuro-wasm/examples/webgpu-demo/README.md:1) - generic WGSL dispatch smoke test
+- [examples/image-classification-demo](/Users/kenia/workspace/neuro-wasm/examples/image-classification-demo/README.md:1) - image classification over a real GPU tensor dispatch
 
-The shim support crates are no longer vendored here. Cargo pulls `containerd-shim-wasm` and `oci-tar-builder` from the upstream `containerd/runwasi` git repository when you build the shim or enable OCI image packaging.
+The shim support crates are vendored from the upstream `containerd/runwasi` `containerd-shim-wasm/v1.0.0` release so the dependency graph stays aligned with the original upstream lockfile.
 
 ## Prerequisites
 
@@ -34,6 +34,8 @@ For Linux with Vulkan:
 The shim uses `wgpu` natively, so it talks to the host GPU stack rather than emulating compute in the guest.
 
 The demo Wasm modules build on macOS, but the native containerd shim currently needs a Linux host because the upstream `containerd-shim-wasm` stack still depends on Linux-only components such as `procfs`.
+
+The Linux build also needs a working C toolchain for `bindgen`. `wasmedge-sys` generates bindings from `wasmedge.h`, so Clang and the system libc development headers must be installed.
 
 ## Build
 

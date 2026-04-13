@@ -1,0 +1,88 @@
+[package]
+name = "containerd-shim-wasm"
+description = "Library for building containerd shims for wasm"
+version = "1.0.0"
+edition.workspace = true
+license.workspace = true
+readme = "README.md"
+homepage.workspace = true
+repository.workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+anyhow = { workspace = true }
+chrono = { workspace = true }
+containerd-shimkit = { workspace = true }
+containerd-shim = { workspace = true }
+containerd-shim-wasm-test-modules = { workspace = true, optional = true }
+oci-tar-builder = { workspace = true, optional = true }
+env_logger = { workspace = true, optional = true }
+libc = { workspace = true }
+log = { workspace = true }
+oci-spec = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tempfile = { workspace = true, optional = true }
+wat = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+futures = { version = "0.3.30" }
+wasmparser = { version = "0.228.0" }
+tokio-stream = { version = "0.1" }
+sha256 = { workspace = true }
+serde_bytes = "0.11"
+tokio-async-drop = "0.1"
+trait-variant = "0.1"
+
+# tracing
+# note: it's important to keep the version of tracing in sync with containerd-shimkit's tracing-subscriber
+tracing = { workspace = true, optional = true }
+
+[target.'cfg(unix)'.dependencies]
+caps = "0.5"
+# this must match the version pulled by libcontainer
+dbus = { version = "0", features = ["vendored"] }
+libcontainer = { workspace = true, features = [
+    "libseccomp",
+    "systemd",
+    "v1",
+    "v2",
+] }
+nix = { workspace = true, features = ["sched", "mount"] }
+containerd-client = "0.6.0"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_Storage_FileSystem",
+] }
+# vendored code
+mio = { version = "1.0", features = ["os-ext", "os-poll"] }
+
+[build-dependencies]
+ttrpc-codegen = { version = "0.4.2" }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["signal"] }
+containerd-shim-wasm-test-modules = { workspace = true }
+env_logger = { workspace = true }
+tempfile = { workspace = true }
+oci-tar-builder = { workspace = true }
+rand = "0.9"
+temp-env = "0.3"
+ctor = "0.4.1"
+
+[features]
+testing = [
+    "dep:containerd-shim-wasm-test-modules",
+    "dep:env_logger",
+    "dep:tempfile",
+    "dep:oci-tar-builder",
+]
+opentelemetry = ["containerd-shimkit/opentelemetry"]
+tracing = ["dep:tracing", "containerd-shimkit/tracing"]
+
+[package.metadata.cargo-machete]
+# used as part of a derive macro
+ignored = ["serde_bytes"]

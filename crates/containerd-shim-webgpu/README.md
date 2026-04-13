@@ -2,7 +2,7 @@
 
 `containerd-shim-webgpu` is an experimental containerd shim for running WasmEdge workloads that need real GPU compute through a small generic host ABI.
 
-This repo only keeps the WebGPU shim and demos. The base runwasi support crates are pulled from the upstream `containerd/runwasi` git repository during build.
+This repo only keeps the WebGPU shim and demos. The base `runwasi` support crates are vendored from the upstream `containerd/runwasi` `containerd-shim-wasm/v1.0.0` release so the dependency graph stays reproducible.
 
 The shim uses native `wgpu` on the host. In practice that means:
 
@@ -66,6 +66,8 @@ Or through the workspace helper:
 make build-webgpu
 ```
 
+On Linux, make sure Clang and the system libc development headers are installed before building. `wasmedge-sys` runs `bindgen` over `wasmedge.h`, and missing standard headers such as `stdbool.h` will stop the build.
+
 ## Install
 
 ```terminal
@@ -84,5 +86,5 @@ The current containerd integration still has to be built and run on Linux becaus
 
 ## Examples
 
-- [webgpu-demo](/Users/kenia/workspace/runwasi/examples/webgpu-demo/README.md:1)
-- [image-classification-demo](/Users/kenia/workspace/runwasi/examples/image-classification-demo/README.md:1)
+- [webgpu-demo](/Users/kenia/workspace/neuro-wasm/examples/webgpu-demo/README.md:1)
+- [image-classification-demo](/Users/kenia/workspace/neuro-wasm/examples/image-classification-demo/README.md:1)
